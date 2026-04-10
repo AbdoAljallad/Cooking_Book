@@ -1,0 +1,19 @@
+[database]
+driver = "mysql+pymysql"
+host = "127.0.0.1"
+port = 3306
+name = "cookbook_db"
+user = "root"
+password = "your_password"
+charset = "utf8mb4"
+connect_timeout = 3
+pool_pre_ping = true
+pool_recycle = 1800
+pool_size = 5
+max_overflow = 10
+echo = false
+
+[ui]
+default_theme = "dark"
+language = "en"
+direction = "ltr"

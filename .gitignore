@@ -1,0 +1,52 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test and tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Local IDE/editor settings
+.idea/
+.vscode/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local configuration overrides
+.env
+.env.*
+app/config/app_config.toml
+
+# Local databases and sqlite files
+*.db
+*.sqlite
+*.sqlite3
+
+# Build and packaging output
+build/
+dist/
+*.spec
+
+# PyInstaller / packaging artifacts
+__pypackages__/
+
+# Generated runtime assets
+assets/images/recipes/*
+assets/images/placeholders/no_image.png
+
+# Logs
+*.log

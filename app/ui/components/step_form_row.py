@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.services import CreateRecipeStepInput
+from app.utils.i18n import translate
 
 
 class StepFormRow(QWidget):
@@ -19,6 +20,7 @@ class StepFormRow(QWidget):
     def __init__(self, step_number: int, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.step_number = step_number
+        self._language_code = "en"
         self.setObjectName("editorRow")
         self._build_ui()
 
@@ -28,24 +30,24 @@ class StepFormRow(QWidget):
         layout.setHorizontalSpacing(10)
         layout.setVerticalSpacing(10)
 
-        self.step_label = QLabel(f"Step {self.step_number}")
+        self.step_label = QLabel()
         self.step_label.setObjectName("eyebrowLabel")
         layout.addWidget(self.step_label, 0, 0)
 
-        self.remove_button = QPushButton("Remove")
+        self.remove_button = QPushButton()
         self.remove_button.setObjectName("secondaryButton")
         self.remove_button.clicked.connect(lambda: self.remove_requested.emit(self))
         layout.addWidget(self.remove_button, 0, 1)
 
         self.instruction_en_input = QTextEdit()
         self.instruction_en_input.setObjectName("multilineField")
-        self.instruction_en_input.setPlaceholderText("Instruction in English")
+        self.instruction_en_input.setPlaceholderText("")
         self.instruction_en_input.setFixedHeight(88)
         layout.addWidget(self.instruction_en_input, 1, 0, 1, 2)
 
         self.instruction_ar_input = QTextEdit()
         self.instruction_ar_input.setObjectName("multilineField")
-        self.instruction_ar_input.setPlaceholderText("Instruction in Arabic (optional)")
+        self.instruction_ar_input.setPlaceholderText("")
         self.instruction_ar_input.setFixedHeight(88)
         layout.addWidget(self.instruction_ar_input, 1, 2, 1, 2)
 
@@ -55,10 +57,18 @@ class StepFormRow(QWidget):
         self.estimated_minutes_input.setMaximum(9999)
         self.estimated_minutes_input.setSpecialValueText("")
         layout.addWidget(self.estimated_minutes_input, 0, 3)
+        self.set_language("en")
 
     def set_step_number(self, step_number: int) -> None:
         self.step_number = step_number
-        self.step_label.setText(f"Step {step_number}")
+        self.step_label.setText(translate(self._language_code, "step.number", number=step_number))
+
+    def set_language(self, language_code: str) -> None:
+        self._language_code = language_code
+        self.step_label.setText(translate(language_code, "step.number", number=self.step_number))
+        self.remove_button.setText(translate(language_code, "step.remove"))
+        self.instruction_en_input.setPlaceholderText(translate(language_code, "step.instruction_en"))
+        self.instruction_ar_input.setPlaceholderText(translate(language_code, "step.instruction_ar"))
 
     def to_input(self) -> CreateRecipeStepInput:
         estimated = self.estimated_minutes_input.value()

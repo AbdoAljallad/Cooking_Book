@@ -1,17 +1,9 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (
-    QComboBox,
-    QFormLayout,
-    QLabel,
-    QPushButton,
-    QScrollArea,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QComboBox, QFormLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from app.services import AppContext, AppContextService, SettingsService
+from app.services import AppContextService, SettingsService
 from app.services.models import SettingsViewData
 from app.ui.components.base_card import BaseCard
 from app.ui.components.section_header import SectionHeader
@@ -124,7 +116,7 @@ class SettingsPage(QWidget):
         self.feedback_label.hide()
         self.language_combo.clear()
         for item in view_data.available_languages:
-            self.language_combo.addItem(f"{item.label} · {item.native_name}", item.code)
+            self.language_combo.addItem(f"{item.label} • {item.native_name}", item.code)
         index = self.language_combo.findData(view_data.selected_language_code)
         if index >= 0:
             self.language_combo.setCurrentIndex(index)

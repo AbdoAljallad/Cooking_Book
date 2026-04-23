@@ -1,19 +1,10 @@
 from __future__ import annotations
 
 from decimal import Decimal
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import (
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QScrollArea,
-    QDoubleSpinBox,
-    QTextEdit,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QDoubleSpinBox, QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QTextEdit, QVBoxLayout, QWidget
 
 from app.services import AppContextService, RecipeService
 from app.services.image_service import ImageService
@@ -23,6 +14,7 @@ from app.ui.components.detail_meta_chip import DetailMetaChip
 from app.ui.components.empty_state import EmptyState
 from app.ui.components.rating_control import RatingControl
 from app.ui.components.section_header import SectionHeader
+from app.utils.i18n import translate
 
 
 class RecipeDetailsPage(QWidget):
@@ -42,8 +34,7 @@ class RecipeDetailsPage(QWidget):
         self.current_recipe_id: int | None = None
         self.base_details: RecipeDetailsData | None = None
         self.current_profile_id: int | None = None
-        self.current_language_code: str = "en"
-
+        self.current_language_code = "en"
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -65,7 +56,7 @@ class RecipeDetailsPage(QWidget):
         self.layout_root.setSpacing(24)
 
         back_row = QHBoxLayout()
-        self.back_button = QPushButton("Back to Home")
+        self.back_button = QPushButton()
         self.back_button.setObjectName("secondaryButton")
         self.back_button.clicked.connect(self.back_requested.emit)
         back_row.addWidget(self.back_button, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -93,7 +84,7 @@ class RecipeDetailsPage(QWidget):
         actions_row = QHBoxLayout()
         actions_row.setSpacing(12)
 
-        self.favorite_button = QPushButton("Save to Favorites")
+        self.favorite_button = QPushButton()
         self.favorite_button.setObjectName("secondaryButton")
         self.favorite_button.clicked.connect(self._toggle_favorite)
         actions_row.addWidget(self.favorite_button, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -102,7 +93,6 @@ class RecipeDetailsPage(QWidget):
         self.detail_feedback.setObjectName("statusDetails")
         self.detail_feedback.hide()
         actions_row.addWidget(self.detail_feedback, stretch=1, alignment=Qt.AlignmentFlag.AlignVCenter)
-
         self.hero_card.content_layout.addLayout(actions_row)
 
         self.image_label = QLabel()
@@ -112,20 +102,19 @@ class RecipeDetailsPage(QWidget):
         self.hero_card.content_layout.addWidget(self.image_label)
 
         self.meta_card = BaseCard()
-        self.meta_card.content_layout.addWidget(
-            SectionHeader("Recipe Snapshot", "A quick, structured overview prepared for future scaling and interaction.")
-        )
+        self.meta_header = SectionHeader("", "")
+        self.meta_card.content_layout.addWidget(self.meta_header)
         servings_row = QHBoxLayout()
         servings_row.setSpacing(12)
 
         servings_copy = QVBoxLayout()
         servings_copy.setSpacing(4)
 
-        servings_label = QLabel("Servings Scaling")
-        servings_label.setObjectName("sectionTitle")
-        servings_copy.addWidget(servings_label)
+        self.servings_label = QLabel()
+        self.servings_label.setObjectName("sectionTitle")
+        servings_copy.addWidget(self.servings_label)
 
-        self.servings_caption = QLabel("Adjust the target yield and ingredient quantities update instantly.")
+        self.servings_caption = QLabel()
         self.servings_caption.setObjectName("sectionSubtitle")
         self.servings_caption.setWordWrap(True)
         servings_copy.addWidget(self.servings_caption)
@@ -163,44 +152,41 @@ class RecipeDetailsPage(QWidget):
         self.layout_root.addWidget(self.meta_card)
 
         self.tags_card = BaseCard()
-        self.tags_card.content_layout.addWidget(
-            SectionHeader("Tags", "Lightweight contextual labels for faster scanning.")
-        )
+        self.tags_header = SectionHeader("", "")
+        self.tags_card.content_layout.addWidget(self.tags_header)
         self.tags_row = QHBoxLayout()
         self.tags_row.setSpacing(8)
         self.tags_card.content_layout.addLayout(self.tags_row)
         self.layout_root.addWidget(self.tags_card)
 
         self.personal_card = BaseCard()
-        self.personal_card.content_layout.addWidget(
-            SectionHeader("Your Take", "Keep favorites, a personal rating, and a lightweight note tied to your local profile.")
-        )
+        self.personal_header = SectionHeader("", "")
+        self.personal_card.content_layout.addWidget(self.personal_header)
 
         rating_row = QVBoxLayout()
         rating_row.setSpacing(6)
-        rating_label = QLabel("Your Rating")
-        rating_label.setObjectName("sectionTitle")
-        rating_row.addWidget(rating_label)
+        self.rating_label = QLabel()
+        self.rating_label.setObjectName("sectionTitle")
+        rating_row.addWidget(self.rating_label)
 
         self.rating_control = RatingControl()
         self.rating_control.rating_changed.connect(self._save_rating)
         rating_row.addWidget(self.rating_control)
         self.personal_card.content_layout.addLayout(rating_row)
 
-        notes_label = QLabel("Personal Note")
-        notes_label.setObjectName("sectionTitle")
-        self.personal_card.content_layout.addWidget(notes_label)
+        self.notes_label = QLabel()
+        self.notes_label.setObjectName("sectionTitle")
+        self.personal_card.content_layout.addWidget(self.notes_label)
 
         self.note_editor = QTextEdit()
         self.note_editor.setObjectName("multilineField")
         self.note_editor.setFixedHeight(140)
-        self.note_editor.setPlaceholderText("Capture your tweaks, reminders, and serving notes here.")
         self.personal_card.content_layout.addWidget(self.note_editor)
 
         note_actions = QHBoxLayout()
         note_actions.setSpacing(12)
         note_actions.addStretch(1)
-        self.save_note_button = QPushButton("Save Note")
+        self.save_note_button = QPushButton()
         self.save_note_button.setObjectName("primaryButton")
         self.save_note_button.clicked.connect(self._save_note)
         note_actions.addWidget(self.save_note_button)
@@ -208,34 +194,31 @@ class RecipeDetailsPage(QWidget):
         self.layout_root.addWidget(self.personal_card)
 
         self.ingredients_card = BaseCard()
-        self.ingredients_card.content_layout.addWidget(
-            SectionHeader("Ingredients", "Structured for future servings scaling while already readable today.")
-        )
+        self.ingredients_header = SectionHeader("", "")
+        self.ingredients_card.content_layout.addWidget(self.ingredients_header)
         self.ingredients_layout = QVBoxLayout()
         self.ingredients_layout.setSpacing(10)
         self.ingredients_card.content_layout.addLayout(self.ingredients_layout)
         self.layout_root.addWidget(self.ingredients_card)
 
         self.steps_card = BaseCard()
-        self.steps_card.content_layout.addWidget(
-            SectionHeader("Method", "Clear, ordered steps with room for future timers and progress tracking.")
-        )
+        self.steps_header = SectionHeader("", "")
+        self.steps_card.content_layout.addWidget(self.steps_header)
         self.steps_layout = QVBoxLayout()
         self.steps_layout.setSpacing(12)
         self.steps_card.content_layout.addLayout(self.steps_layout)
         self.layout_root.addWidget(self.steps_card)
 
-        self.missing_state = EmptyState(
-            "Recipe not available.",
-            "This recipe could not be loaded. It may have been removed or the database is currently unavailable.",
-        )
+        self.missing_state = EmptyState("", "")
         self.layout_root.addWidget(self.missing_state)
         self.missing_state.hide()
+        self._apply_static_translations()
 
     def load_recipe(self, recipe_id: int) -> None:
         context = self.context_service.get_context()
         self.current_profile_id = context.profile_id
         self.current_language_code = context.language_code
+        self._apply_static_translations()
         details = self.recipe_service.get_recipe_details(
             recipe_id,
             context.language_code,
@@ -256,6 +239,49 @@ class RecipeDetailsPage(QWidget):
         self._set_servings_value(details.base_servings)
         self._apply_scaled_view()
 
+    def refresh_language(self) -> None:
+        context = self.context_service.get_context()
+        self.current_profile_id = context.profile_id
+        self.current_language_code = context.language_code
+        self._apply_static_translations()
+        if self.current_recipe_id is not None:
+            self.load_recipe(self.current_recipe_id)
+
+    def _apply_static_translations(self) -> None:
+        code = self.current_language_code
+        self.back_button.setText(translate(code, "details.back"))
+        self.meta_header.set_content(
+            translate(code, "details.meta_title"),
+            translate(code, "details.meta_subtitle"),
+        )
+        self.servings_label.setText(translate(code, "details.servings_title"))
+        self.tags_header.set_content(
+            translate(code, "details.tags_title"),
+            translate(code, "details.tags_subtitle"),
+        )
+        self.personal_header.set_content(
+            translate(code, "details.personal_title"),
+            translate(code, "details.personal_subtitle"),
+        )
+        self.rating_label.setText(translate(code, "details.rating"))
+        self.notes_label.setText(translate(code, "details.note"))
+        self.note_editor.setPlaceholderText(translate(code, "details.note_placeholder"))
+        self.save_note_button.setText(translate(code, "details.note_save"))
+        self.ingredients_header.set_content(
+            translate(code, "details.ingredients_title"),
+            translate(code, "details.ingredients_subtitle"),
+        )
+        self.steps_header.set_content(
+            translate(code, "details.steps_title"),
+            translate(code, "details.steps_subtitle"),
+        )
+        self.missing_state.set_content(
+            translate(code, "details.missing_title"),
+            translate(code, "details.missing_description"),
+        )
+        if self.base_details is not None:
+            self._sync_favorite_button(self.base_details.is_favorite)
+
     def _show_recipe(self, details: RecipeDetailsData) -> None:
         self.hero_card.show()
         self.meta_card.show()
@@ -267,11 +293,14 @@ class RecipeDetailsPage(QWidget):
 
         self.category_label.setText(details.category_name)
         self.title_label.setText(details.title)
-        self.description_label.setText(
-            details.short_description or "A refined recipe canvas with all essential structure in place."
-        )
+        self.description_label.setText(details.short_description or translate(self.current_language_code, "details.description_fallback"))
         self.servings_caption.setText(
-            f"Base {details.base_servings_display} servings, currently viewing {details.selected_servings_display}."
+            translate(
+                self.current_language_code,
+                "details.servings_caption",
+                base=details.base_servings_display,
+                selected=details.selected_servings_display,
+            )
         )
         self._set_image(details.image_path, details.title)
         self._populate_meta(details)
@@ -309,13 +338,13 @@ class RecipeDetailsPage(QWidget):
     def _populate_meta(self, details: RecipeDetailsData) -> None:
         self._clear_grid(self.meta_grid)
         chips = [
-            ("Prep", f"{details.prep_time_minutes} min"),
-            ("Cook", f"{details.cook_time_minutes} min"),
-            ("Total", f"{details.total_time_minutes} min"),
-            ("Base", details.base_servings_display),
-            ("Selected", details.selected_servings_display),
-            ("Difficulty", details.difficulty_level.title()),
-            ("Source", details.source_type.replace("_", " ").title()),
+            (translate(self.current_language_code, "details.meta.prep"), f"{details.prep_time_minutes} min"),
+            (translate(self.current_language_code, "details.meta.cook"), f"{details.cook_time_minutes} min"),
+            (translate(self.current_language_code, "details.meta.total"), f"{details.total_time_minutes} min"),
+            (translate(self.current_language_code, "details.meta.base"), details.base_servings_display),
+            (translate(self.current_language_code, "details.meta.selected"), details.selected_servings_display),
+            (translate(self.current_language_code, "details.meta.difficulty"), details.difficulty_level.title()),
+            (translate(self.current_language_code, "details.meta.source"), details.source_type.replace("_", " ").title()),
         ]
         for index, (label, value) in enumerate(chips):
             row = index // 3
@@ -325,7 +354,7 @@ class RecipeDetailsPage(QWidget):
     def _populate_tags(self, details: RecipeDetailsData) -> None:
         self._clear_box(self.tags_row)
         if not details.tags:
-            placeholder = QLabel("No tags assigned yet")
+            placeholder = QLabel(translate(self.current_language_code, "details.no_tags"))
             placeholder.setObjectName("heroSubtitle")
             self.tags_row.addWidget(placeholder)
             self.tags_row.addStretch(1)
@@ -340,7 +369,7 @@ class RecipeDetailsPage(QWidget):
     def _populate_ingredients(self, details: RecipeDetailsData) -> None:
         self._clear_column(self.ingredients_layout)
         if not details.ingredients:
-            placeholder = QLabel("Ingredients have not been added yet.")
+            placeholder = QLabel(translate(self.current_language_code, "details.no_ingredients"))
             placeholder.setObjectName("heroSubtitle")
             self.ingredients_layout.addWidget(placeholder)
             return
@@ -384,7 +413,7 @@ class RecipeDetailsPage(QWidget):
         if self.current_recipe_id is None:
             return
         if self.current_profile_id is None:
-            self._show_feedback("A local profile is required to save favorites.")
+            self._show_feedback(translate(self.current_language_code, "details.feedback.profile_required_favorites"))
             return
         try:
             is_favorite = self.recipe_service.toggle_favorite(self.current_recipe_id, self.current_profile_id)
@@ -394,32 +423,38 @@ class RecipeDetailsPage(QWidget):
         if self.base_details is not None:
             self.base_details = self._replace_personal_state(self.base_details, is_favorite=is_favorite)
         self._sync_favorite_button(is_favorite)
-        self._show_feedback("Saved to favorites." if is_favorite else "Removed from favorites.")
+        self._show_feedback(
+            translate(
+                self.current_language_code,
+                "details.feedback.favorite_saved" if is_favorite else "details.feedback.favorite_removed",
+            )
+        )
 
     def _save_rating(self, rating: int | None) -> None:
         if self.current_recipe_id is None:
             return
         if self.current_profile_id is None:
-            self._show_feedback("A local profile is required to save ratings.")
+            self._show_feedback(translate(self.current_language_code, "details.feedback.profile_required_ratings"))
             return
         try:
-            saved_rating = self.recipe_service.save_personal_rating(
-                self.current_recipe_id,
-                self.current_profile_id,
-                rating,
-            )
+            saved_rating = self.recipe_service.save_personal_rating(self.current_recipe_id, self.current_profile_id, rating)
         except Exception as exc:
             self._show_feedback(str(exc))
             return
         if self.base_details is not None:
             self.base_details = self._replace_personal_state(self.base_details, personal_rating=saved_rating)
-        self._show_feedback("Rating saved." if saved_rating is not None else "Rating cleared.")
+        self._show_feedback(
+            translate(
+                self.current_language_code,
+                "details.feedback.rating_saved" if saved_rating is not None else "details.feedback.rating_cleared",
+            )
+        )
 
     def _save_note(self) -> None:
         if self.current_recipe_id is None:
             return
         if self.current_profile_id is None:
-            self._show_feedback("A local profile is required to save notes.")
+            self._show_feedback(translate(self.current_language_code, "details.feedback.profile_required_notes"))
             return
         try:
             saved_note = self.recipe_service.save_personal_note(
@@ -433,7 +468,12 @@ class RecipeDetailsPage(QWidget):
         if self.base_details is not None:
             self.base_details = self._replace_personal_state(self.base_details, personal_note=saved_note)
         self.note_editor.setPlainText(saved_note or "")
-        self._show_feedback("Note saved." if saved_note else "Note cleared.")
+        self._show_feedback(
+            translate(
+                self.current_language_code,
+                "details.feedback.note_saved" if saved_note else "details.feedback.note_cleared",
+            )
+        )
 
     def _replace_personal_state(
         self,
@@ -445,7 +485,7 @@ class RecipeDetailsPage(QWidget):
     ) -> RecipeDetailsData:
         rating_value = details.personal_rating if personal_rating is ... else personal_rating
         note_value = details.personal_note if personal_note is ... else personal_note
-        updated = RecipeDetailsData(
+        return RecipeDetailsData(
             id=details.id,
             title=details.title,
             short_description=details.short_description,
@@ -467,10 +507,10 @@ class RecipeDetailsPage(QWidget):
             ingredients=details.ingredients,
             steps=details.steps,
         )
-        return updated
 
     def _sync_favorite_button(self, is_favorite: bool) -> None:
-        self.favorite_button.setText("Favorited" if is_favorite else "Save to Favorites")
+        key = "details.favorite.saved" if is_favorite else "details.favorite.save"
+        self.favorite_button.setText(translate(self.current_language_code, key))
         self.favorite_button.setProperty("active", is_favorite)
         self.favorite_button.style().unpolish(self.favorite_button)
         self.favorite_button.style().polish(self.favorite_button)
@@ -482,7 +522,7 @@ class RecipeDetailsPage(QWidget):
     def _populate_steps(self, details: RecipeDetailsData) -> None:
         self._clear_column(self.steps_layout)
         if not details.steps:
-            placeholder = QLabel("Steps have not been added yet.")
+            placeholder = QLabel(translate(self.current_language_code, "details.no_steps"))
             placeholder.setObjectName("heroSubtitle")
             self.steps_layout.addWidget(placeholder)
             return
@@ -491,7 +531,7 @@ class RecipeDetailsPage(QWidget):
             card = BaseCard()
             card.setObjectName("stepCard")
 
-            number = QLabel(f"Step {step.sort_order}")
+            number = QLabel(translate(self.current_language_code, "step.number", number=step.sort_order))
             number.setObjectName("eyebrowLabel")
             card.content_layout.addWidget(number)
 
@@ -501,7 +541,7 @@ class RecipeDetailsPage(QWidget):
             card.content_layout.addWidget(instruction)
 
             if step.estimated_minutes is not None:
-                estimate = QLabel(f"Estimated {step.estimated_minutes} min")
+                estimate = QLabel(translate(self.current_language_code, "details.step_estimated", minutes=step.estimated_minutes))
                 estimate.setObjectName("detailLineSecondary")
                 card.content_layout.addWidget(estimate)
 

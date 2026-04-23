@@ -34,11 +34,11 @@ def test_reference_seed_is_idempotent(tmp_path: Path) -> None:
     assert second.profiles == 1
     assert second.app_settings == 1
     assert second.categories == 14
-    assert second.category_translations == 28
+    assert second.category_translations == 42
     assert second.units == 8
-    assert second.unit_translations == 16
+    assert second.unit_translations == 24
     assert second.tags == 8
-    assert second.tag_translations == 16
+    assert second.tag_translations == 24
     assert second.recipes == 0
 
     with session_factory() as session:
@@ -46,11 +46,11 @@ def test_reference_seed_is_idempotent(tmp_path: Path) -> None:
         assert session.query(Profile).count() == 1
         assert session.query(AppSetting).count() == 1
         assert session.query(Category).count() == 14
-        assert session.query(CategoryTranslation).count() == 28
+        assert session.query(CategoryTranslation).count() == 42
         assert session.query(Unit).count() == 8
-        assert session.query(UnitTranslation).count() == 16
+        assert session.query(UnitTranslation).count() == 24
         assert session.query(Tag).count() == 8
-        assert session.query(TagTranslation).count() == 16
+        assert session.query(TagTranslation).count() == 24
         assert session.query(Recipe).count() == 0
 
 

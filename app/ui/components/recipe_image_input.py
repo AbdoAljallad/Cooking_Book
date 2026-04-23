@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QBuffer, QByteArray, QIODevice, Qt, Signal
 from PySide6.QtGui import QAction, QDragEnterEvent, QDropEvent, QImage, QKeySequence, QPixmap
-from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QLabel, QPushButton, QWidget
 
 from app.services.image_service import ImageService, ImageValidationError, RecipeImageInput
 from app.ui.components.base_card import BaseCard
@@ -190,7 +190,9 @@ class RecipeImageInputCard(BaseCard):
         self.preview_label.setText("")
         if self._image_input is None:
             self.hint_label.setText(
-                f"{translate(self.language_code, 'image.drop_here')} • {translate(self.language_code, 'image.no_image_selected')}\n{translate(self.language_code, 'image.hint')}"
+                f"{translate(self.language_code, 'image.drop_here')} • "
+                f"{translate(self.language_code, 'image.no_image_selected')}\n"
+                f"{translate(self.language_code, 'image.hint')}"
             )
         else:
             name = self._image_input.source_name or translate(self.language_code, "image.preview_alt")

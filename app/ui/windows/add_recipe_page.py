@@ -4,8 +4,8 @@ from decimal import Decimal
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
+    QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
-    QDoubleSpinBox,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -31,10 +30,10 @@ from app.services import (
 )
 from app.ui.components.base_card import BaseCard
 from app.ui.components.category_chip import CategoryChip
-from app.ui.components.recipe_image_input import RecipeImageInputCard
 from app.ui.components.ingredient_form_row import IngredientFormRow
-from app.ui.components.step_form_row import StepFormRow
+from app.ui.components.recipe_image_input import RecipeImageInputCard
 from app.ui.components.section_header import SectionHeader
+from app.ui.components.step_form_row import StepFormRow
 from app.utils.i18n import translate
 
 
@@ -62,6 +61,8 @@ class AddRecipePage(QWidget):
         self.tag_chips: list[tuple[CategoryChip, LocalizedTag]] = []
         self.ingredient_rows: list[IngredientFormRow] = []
         self.step_rows: list[StepFormRow] = []
+        self.available_units: list[tuple[int, str]] = []
+        self._current_language_code = "en"
 
         self._build_ui()
         self.load_form_options()
@@ -85,12 +86,12 @@ class AddRecipePage(QWidget):
         self.root_layout.setSpacing(24)
 
         top_row = QHBoxLayout()
-        self.back_button = QPushButton("Back")
+        self.back_button = QPushButton()
         self.back_button.setObjectName("secondaryButton")
         self.back_button.clicked.connect(self.back_requested.emit)
         top_row.addWidget(self.back_button, alignment=Qt.AlignmentFlag.AlignLeft)
         top_row.addStretch(1)
-        self.save_button = QPushButton("Save Recipe")
+        self.save_button = QPushButton()
         self.save_button.setObjectName("primaryButton")
         self.save_button.clicked.connect(self._handle_save)
         top_row.addWidget(self.save_button, alignment=Qt.AlignmentFlag.AlignRight)
@@ -100,21 +101,19 @@ class AddRecipePage(QWidget):
         self.hero_card.setObjectName("heroCard")
         self.root_layout.addWidget(self.hero_card)
 
-        eyebrow = QLabel("Create recipe")
-        eyebrow.setObjectName("eyebrowLabel")
-        self.hero_card.content_layout.addWidget(eyebrow)
+        self.eyebrow = QLabel()
+        self.eyebrow.setObjectName("eyebrowLabel")
+        self.hero_card.content_layout.addWidget(self.eyebrow)
 
-        title = QLabel("Compose a polished new recipe entry.")
-        title.setObjectName("detailsTitle")
-        title.setWordWrap(True)
-        self.hero_card.content_layout.addWidget(title)
+        self.title_label = QLabel()
+        self.title_label.setObjectName("detailsTitle")
+        self.title_label.setWordWrap(True)
+        self.hero_card.content_layout.addWidget(self.title_label)
 
-        subtitle = QLabel(
-            "Enter the core recipe data once, save both languages where available, and land directly in the finished details view."
-        )
-        subtitle.setObjectName("heroSubtitle")
-        subtitle.setWordWrap(True)
-        self.hero_card.content_layout.addWidget(subtitle)
+        self.subtitle_label = QLabel()
+        self.subtitle_label.setObjectName("heroSubtitle")
+        self.subtitle_label.setWordWrap(True)
+        self.hero_card.content_layout.addWidget(self.subtitle_label)
 
         self.error_banner = QLabel()
         self.error_banner.setObjectName("formErrorBanner")
@@ -129,29 +128,32 @@ class AddRecipePage(QWidget):
 
     def _build_basic_info_section(self) -> None:
         card = BaseCard()
-        card.content_layout.addWidget(
-            SectionHeader("Basic Info", "English is required. Arabic can be added now and expanded later.")
-        )
+        self.basic_info_header = SectionHeader("", "")
+        card.content_layout.addWidget(self.basic_info_header)
         form = QFormLayout()
         form.setSpacing(12)
 
         self.title_en_input = QLineEdit()
         self.title_en_input.setObjectName("searchInput")
-        form.addRow("Title (EN)", self.title_en_input)
+        self.title_en_label = QLabel()
+        form.addRow(self.title_en_label, self.title_en_input)
 
         self.title_ar_input = QLineEdit()
         self.title_ar_input.setObjectName("searchInput")
-        form.addRow("Title (AR)", self.title_ar_input)
+        self.title_ar_label = QLabel()
+        form.addRow(self.title_ar_label, self.title_ar_input)
 
         self.description_en_input = QTextEdit()
         self.description_en_input.setObjectName("multilineField")
         self.description_en_input.setFixedHeight(86)
-        form.addRow("Description (EN)", self.description_en_input)
+        self.description_en_label = QLabel()
+        form.addRow(self.description_en_label, self.description_en_input)
 
         self.description_ar_input = QTextEdit()
         self.description_ar_input.setObjectName("multilineField")
         self.description_ar_input.setFixedHeight(86)
-        form.addRow("Description (AR)", self.description_ar_input)
+        self.description_ar_label = QLabel()
+        form.addRow(self.description_ar_label, self.description_ar_input)
 
         card.content_layout.addLayout(form)
         self.image_input_card = RecipeImageInputCard(self.image_service)
@@ -160,46 +162,48 @@ class AddRecipePage(QWidget):
 
     def _build_metadata_section(self) -> None:
         card = BaseCard()
-        card.content_layout.addWidget(
-            SectionHeader("Metadata", "Core recipe timing, servings, category, and type settings.")
-        )
+        self.metadata_header = SectionHeader("", "")
+        card.content_layout.addWidget(self.metadata_header)
         form = QFormLayout()
         form.setSpacing(12)
 
         self.category_combo = QComboBox()
-        form.addRow("Category", self.category_combo)
+        self.category_label = QLabel()
+        form.addRow(self.category_label, self.category_combo)
 
         self.prep_time_input = QSpinBox()
         self.prep_time_input.setMaximum(9999)
-        form.addRow("Prep Time (min)", self.prep_time_input)
+        self.prep_time_label = QLabel()
+        form.addRow(self.prep_time_label, self.prep_time_input)
 
         self.cook_time_input = QSpinBox()
         self.cook_time_input.setMaximum(9999)
-        form.addRow("Cook Time (min)", self.cook_time_input)
+        self.cook_time_label = QLabel()
+        form.addRow(self.cook_time_label, self.cook_time_input)
 
         self.base_servings_input = QDoubleSpinBox()
         self.base_servings_input.setDecimals(2)
         self.base_servings_input.setMinimum(0.25)
         self.base_servings_input.setMaximum(999)
         self.base_servings_input.setValue(4)
-        form.addRow("Base Servings", self.base_servings_input)
+        self.base_servings_label = QLabel()
+        form.addRow(self.base_servings_label, self.base_servings_input)
 
         self.difficulty_combo = QComboBox()
-        self.difficulty_combo.addItems(["easy", "medium", "hard"])
-        form.addRow("Difficulty", self.difficulty_combo)
+        self.difficulty_label = QLabel()
+        form.addRow(self.difficulty_label, self.difficulty_combo)
 
         self.source_type_combo = QComboBox()
-        self.source_type_combo.addItems(["original", "imported", "adapted"])
-        form.addRow("Source Type", self.source_type_combo)
+        self.source_type_label = QLabel()
+        form.addRow(self.source_type_label, self.source_type_combo)
 
         card.content_layout.addLayout(form)
         self.root_layout.addWidget(card)
 
     def _build_tags_section(self) -> None:
         self.tags_card = BaseCard()
-        self.tags_card.content_layout.addWidget(
-            SectionHeader("Tags", "Select the labels that best frame the new recipe.")
-        )
+        self.tags_header = SectionHeader("", "")
+        self.tags_card.content_layout.addWidget(self.tags_header)
         self.tags_row = QHBoxLayout()
         self.tags_row.setSpacing(8)
         self.tags_card.content_layout.addLayout(self.tags_row)
@@ -207,36 +211,36 @@ class AddRecipePage(QWidget):
 
     def _build_ingredients_section(self) -> None:
         self.ingredients_card = BaseCard()
-        self.ingredients_card.content_layout.addWidget(
-            SectionHeader("Ingredients", "Type ingredient names directly. Existing ingredients are reused automatically when names match.")
-        )
+        self.ingredients_header = SectionHeader("", "")
+        self.ingredients_card.content_layout.addWidget(self.ingredients_header)
         self.ingredients_container = QVBoxLayout()
         self.ingredients_container.setSpacing(14)
         self.ingredients_card.content_layout.addLayout(self.ingredients_container)
 
-        add_button = QPushButton("Add Ingredient")
-        add_button.setObjectName("secondaryButton")
-        add_button.clicked.connect(self._add_ingredient_row)
-        self.ingredients_card.content_layout.addWidget(add_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.add_ingredient_button = QPushButton()
+        self.add_ingredient_button.setObjectName("secondaryButton")
+        self.add_ingredient_button.clicked.connect(self._add_ingredient_row)
+        self.ingredients_card.content_layout.addWidget(self.add_ingredient_button, alignment=Qt.AlignmentFlag.AlignLeft)
         self.root_layout.addWidget(self.ingredients_card)
 
     def _build_steps_section(self) -> None:
         self.steps_card = BaseCard()
-        self.steps_card.content_layout.addWidget(
-            SectionHeader("Steps", "Write the method in order. English is required, Arabic remains optional.")
-        )
+        self.steps_header = SectionHeader("", "")
+        self.steps_card.content_layout.addWidget(self.steps_header)
         self.steps_container = QVBoxLayout()
         self.steps_container.setSpacing(14)
         self.steps_card.content_layout.addLayout(self.steps_container)
 
-        add_button = QPushButton("Add Step")
-        add_button.setObjectName("secondaryButton")
-        add_button.clicked.connect(self._add_step_row)
-        self.steps_card.content_layout.addWidget(add_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.add_step_button = QPushButton()
+        self.add_step_button.setObjectName("secondaryButton")
+        self.add_step_button.clicked.connect(self._add_step_row)
+        self.steps_card.content_layout.addWidget(self.add_step_button, alignment=Qt.AlignmentFlag.AlignLeft)
         self.root_layout.addWidget(self.steps_card)
 
     def load_form_options(self) -> None:
         context = self.context_service.get_context()
+        self._current_language_code = context.language_code
+        self._apply_translations(context.language_code)
         self.image_input_card.set_language(context.language_code)
         categories = self.category_service.list_categories(context.language_code)
         tags = self.tag_service.list_tags(context.language_code)
@@ -246,9 +250,66 @@ class AddRecipePage(QWidget):
         for category in categories:
             self.category_combo.addItem(category.display_name, category.id)
 
+        self._populate_difficulty_options()
+        self._populate_source_options()
         self._populate_tag_chips(tags)
         self._reset_static_fields()
         self._reset_rows([(unit.id, unit.display_name) for unit in units])
+
+    def _apply_translations(self, language_code: str) -> None:
+        self.back_button.setText(translate(language_code, "add_recipe.back"))
+        self.save_button.setText(translate(language_code, "add_recipe.save"))
+        self.eyebrow.setText(translate(language_code, "add_recipe.eyebrow"))
+        self.title_label.setText(translate(language_code, "add_recipe.title"))
+        self.subtitle_label.setText(translate(language_code, "add_recipe.subtitle"))
+        self.basic_info_header.set_content(
+            translate(language_code, "add_recipe.basic_info_title"),
+            translate(language_code, "add_recipe.basic_info_subtitle"),
+        )
+        self.title_en_label.setText(translate(language_code, "add_recipe.field.title_en"))
+        self.title_ar_label.setText(translate(language_code, "add_recipe.field.title_ar"))
+        self.description_en_label.setText(translate(language_code, "add_recipe.field.description_en"))
+        self.description_ar_label.setText(translate(language_code, "add_recipe.field.description_ar"))
+        self.metadata_header.set_content(
+            translate(language_code, "add_recipe.metadata_title"),
+            translate(language_code, "add_recipe.metadata_subtitle"),
+        )
+        self.category_label.setText(translate(language_code, "add_recipe.field.category"))
+        self.prep_time_label.setText(translate(language_code, "add_recipe.field.prep_time"))
+        self.cook_time_label.setText(translate(language_code, "add_recipe.field.cook_time"))
+        self.base_servings_label.setText(translate(language_code, "add_recipe.field.base_servings"))
+        self.difficulty_label.setText(translate(language_code, "add_recipe.field.difficulty"))
+        self.source_type_label.setText(translate(language_code, "add_recipe.field.source_type"))
+        self.tags_header.set_content(
+            translate(language_code, "add_recipe.tags_title"),
+            translate(language_code, "add_recipe.tags_subtitle"),
+        )
+        self.ingredients_header.set_content(
+            translate(language_code, "add_recipe.ingredients_title"),
+            translate(language_code, "add_recipe.ingredients_subtitle"),
+        )
+        self.add_ingredient_button.setText(translate(language_code, "add_recipe.add_ingredient"))
+        self.steps_header.set_content(
+            translate(language_code, "add_recipe.steps_title"),
+            translate(language_code, "add_recipe.steps_subtitle"),
+        )
+        self.add_step_button.setText(translate(language_code, "add_recipe.add_step"))
+
+    def _populate_difficulty_options(self) -> None:
+        current = self.difficulty_combo.currentData()
+        self.difficulty_combo.clear()
+        for value in ("easy", "medium", "hard"):
+            self.difficulty_combo.addItem(translate(self._current_language_code, f"add_recipe.difficulty.{value}"), value)
+        index = self.difficulty_combo.findData(current or "easy")
+        self.difficulty_combo.setCurrentIndex(max(index, 0))
+
+    def _populate_source_options(self) -> None:
+        current = self.source_type_combo.currentData()
+        self.source_type_combo.clear()
+        for value in ("original", "imported", "adapted"):
+            self.source_type_combo.addItem(translate(self._current_language_code, f"add_recipe.source.{value}"), value)
+        index = self.source_type_combo.findData(current or "original")
+        self.source_type_combo.setCurrentIndex(max(index, 0))
 
     def _reset_static_fields(self) -> None:
         self.title_en_input.clear()
@@ -259,8 +320,10 @@ class AddRecipePage(QWidget):
         self.prep_time_input.setValue(0)
         self.cook_time_input.setValue(0)
         self.base_servings_input.setValue(4)
-        self.difficulty_combo.setCurrentText("easy")
-        self.source_type_combo.setCurrentText("original")
+        difficulty_index = self.difficulty_combo.findData("easy")
+        self.difficulty_combo.setCurrentIndex(max(difficulty_index, 0))
+        source_index = self.source_type_combo.findData("original")
+        self.source_type_combo.setCurrentIndex(max(source_index, 0))
         self.error_banner.hide()
         for chip, _tag in self.tag_chips:
             chip.setChecked(False)
@@ -293,6 +356,7 @@ class AddRecipePage(QWidget):
 
     def _add_ingredient_row(self) -> None:
         row = IngredientFormRow(self.available_units)
+        row.set_language(self._current_language_code)
         row.remove_requested.connect(self._remove_ingredient_row)
         self.ingredient_rows.append(row)
         self.ingredients_container.addWidget(row)
@@ -305,6 +369,7 @@ class AddRecipePage(QWidget):
 
     def _add_step_row(self) -> None:
         row = StepFormRow(len(self.step_rows) + 1)
+        row.set_language(self._current_language_code)
         row.remove_requested.connect(self._remove_step_row)
         self.step_rows.append(row)
         self.steps_container.addWidget(row)
@@ -316,11 +381,12 @@ class AddRecipePage(QWidget):
         row.deleteLater()
         for index, step_row in enumerate(self.step_rows, start=1):
             step_row.set_step_number(index)
+            step_row.set_language(self._current_language_code)
 
     def _handle_save(self) -> None:
         context = self.context_service.get_context()
         if context.profile_id is None:
-            self._show_error("A valid local profile is required before recipes can be created.")
+            self._show_error(translate(self._current_language_code, "add_recipe.error.profile_required"))
             return
 
         try:
@@ -344,8 +410,8 @@ class AddRecipePage(QWidget):
             prep_time_minutes=self.prep_time_input.value(),
             cook_time_minutes=self.cook_time_input.value(),
             base_servings=Decimal(str(self.base_servings_input.value())),
-            difficulty_level=self.difficulty_combo.currentText(),
-            source_type=self.source_type_combo.currentText(),
+            difficulty_level=str(self.difficulty_combo.currentData()),
+            source_type=str(self.source_type_combo.currentData()),
             tag_ids=[tag.id for chip, tag in self.tag_chips if chip.isChecked()],
             ingredients=[row.to_input() for row in self.ingredient_rows],
             steps=[row.to_input() for row in self.step_rows],

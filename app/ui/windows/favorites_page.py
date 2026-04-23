@@ -9,6 +9,7 @@ from app.ui.components.base_card import BaseCard
 from app.ui.components.empty_state import EmptyState
 from app.ui.components.recipe_card import RecipeCard
 from app.ui.components.section_header import SectionHeader
+from app.utils.i18n import translate
 
 
 class FavoritesPage(QWidget):
@@ -46,31 +47,39 @@ class FavoritesPage(QWidget):
         self.page_layout.setSpacing(24)
 
         self.hero_card = BaseCard()
-        self.hero_card.setObjectName("heroCard")
-        self.hero_card.content_layout.addWidget(
-            SectionHeader("Favorites", "A personal shelf for the recipes you want close at hand.")
-        )
+        self.hero_header = SectionHeader("", "")
+        self.hero_card.content_layout.addWidget(self.hero_header)
         self.page_layout.addWidget(self.hero_card)
 
         self.grid_card = BaseCard()
-        self.grid_card.content_layout.addWidget(
-            SectionHeader("Saved Recipes", "Profile-scoped favorites rendered with the same discovery cards used across the app.")
-        )
+        self.grid_header = SectionHeader("", "")
+        self.grid_card.content_layout.addWidget(self.grid_header)
         self.recipe_grid = QGridLayout()
         self.recipe_grid.setHorizontalSpacing(16)
         self.recipe_grid.setVerticalSpacing(16)
         self.grid_card.content_layout.addLayout(self.recipe_grid)
         self.page_layout.addWidget(self.grid_card)
 
-        self.empty_state = EmptyState(
-            "No favorites yet.",
-            "Mark recipes as favorites from the details screen and they will collect here for quick access.",
-            badge_text="Favorites empty",
-        )
+        self.empty_state = EmptyState("", "")
         self.page_layout.addWidget(self.empty_state)
 
     def reload(self) -> None:
         context = self.context_service.get_context()
+        language_code = context.language_code
+        self.hero_header.set_content(
+            translate(language_code, "favorites.hero_title"),
+            translate(language_code, "favorites.hero_subtitle"),
+        )
+        self.grid_header.set_content(
+            translate(language_code, "favorites.saved_title"),
+            translate(language_code, "favorites.saved_subtitle"),
+        )
+        self.empty_state.set_content(
+            translate(language_code, "favorites.empty_title"),
+            translate(language_code, "favorites.empty_description"),
+            badge_text=translate(language_code, "favorites.empty_badge"),
+        )
+
         recipes = self.recipe_service.list_favorite_recipes(
             profile_id=context.profile_id,
             language_code=context.language_code,

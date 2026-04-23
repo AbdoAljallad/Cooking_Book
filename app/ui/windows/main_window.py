@@ -270,6 +270,8 @@ class MainWindow(QMainWindow):
         self.theme_selector.blockSignals(False)
         self.home_page.reload()
         self.favorites_page.reload()
+        self.add_recipe_page.load_form_options()
+        self.recipe_details_page.refresh_language()
 
     def _refresh_texts(self) -> None:
         language_code = self.current_context.language_code

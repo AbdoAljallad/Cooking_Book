@@ -82,7 +82,7 @@ def test_reference_repositories_read_seeded_data(tmp_path: Path) -> None:
         app_setting = AppSettingRepository(session).get_for_profile(default_profile.id)  # type: ignore[arg-type]
         categories = CategoryRepository(session).list_all(language_code="ar")
         units = UnitRepository(session).list_all(language_code="en")
-        tags = TagRepository(session).list_all(language_code="ar")
+        tags = TagRepository(session).list_all(language_code="ru")
 
         assert [language.code for language in languages] == ["ar", "en", "ru"]
         assert default_profile is not None
@@ -94,7 +94,10 @@ def test_reference_repositories_read_seeded_data(tmp_path: Path) -> None:
         assert units[0].display_name
         assert units[0].language_code == "en"
         assert tags[0].display_name
-        assert tags[0].language_code == "ar"
+        assert tags[0].language_code == "ru"
+        assert CategoryRepository(session).get_by_slug("soups", language_code="ru") is not None
+        assert UnitRepository(session).get_by_code("gram", language_code="ru") is not None
+        assert TagRepository(session).get_by_slug("quick", language_code="ru") is not None
 
 
 def test_single_record_repository_methods(tmp_path: Path) -> None:
@@ -107,6 +110,9 @@ def test_single_record_repository_methods(tmp_path: Path) -> None:
         assert CategoryRepository(session).get_by_slug("desserts", language_code="ar") is not None
         assert UnitRepository(session).get_by_code("gram", language_code="ar") is not None
         assert TagRepository(session).get_by_slug("quick", language_code="en") is not None
+        assert CategoryRepository(session).get_by_slug("desserts", language_code="ru") is not None
+        assert UnitRepository(session).get_by_code("gram", language_code="ru") is not None
+        assert TagRepository(session).get_by_slug("quick", language_code="ru") is not None
 
 
 def test_app_setting_repository_updates_profile_settings(tmp_path: Path) -> None:

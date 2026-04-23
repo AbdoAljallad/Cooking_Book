@@ -299,6 +299,33 @@ def test_home_service_combines_search_and_category_filters(tmp_path: Path) -> No
     assert none_found.latest_recipes == []
 
 
+def test_home_service_returns_russian_reference_labels(tmp_path: Path) -> None:
+    session_factory = _build_session_factory(tmp_path)
+    run_seed(session_factory)
+    settings = AppSettings(
+        database=DatabaseSettings(name="service_test"),
+        ui=UISettings(default_theme="dark", language="ru", direction="ltr"),
+    )
+    SettingsService(
+        settings=settings,
+        theme_manager=ThemeManager(),
+        session_factory=session_factory,
+    ).save_settings(language_code="ru", theme_name="dark")
+
+    home_service = HomeService(
+        context_service=AppContextService(settings=settings, session_factory=session_factory),
+        category_service=CategoryService(session_factory=session_factory),
+        tag_service=TagService(session_factory=session_factory),
+        recipe_service=RecipeService(session_factory=session_factory),
+    )
+
+    dashboard = home_service.get_dashboard_data()
+
+    assert dashboard.context.language_code == "ru"
+    assert any(item.display_name == "Супы" for item in dashboard.categories)
+    assert any(item.display_name == "Быстро" for item in dashboard.tags)
+
+
 def test_recipe_service_reads_home_recipes(tmp_path: Path) -> None:
     session_factory = _build_session_factory(tmp_path)
     run_seed(session_factory)

@@ -1,15 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import (
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QScrollArea,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 from app.repositories import RecipeListItem
 from app.services import HomeDashboardData, HomeService
@@ -20,7 +12,7 @@ from app.ui.components.empty_state import EmptyState
 from app.ui.components.recipe_card import RecipeCard
 from app.ui.components.search_bar import SearchBar
 from app.ui.components.section_header import SectionHeader
-from app.utils.i18n import translate
+from app.utils.i18n import language_label, translate
 
 
 class HomePage(QWidget):
@@ -31,7 +23,7 @@ class HomePage(QWidget):
         self.home_service = home_service
         self.image_service = image_service
         self._dashboard_data: HomeDashboardData | None = None
-        self._search_text: str = ""
+        self._search_text = ""
         self._selected_category_slug: str | None = None
 
         self._build_ui()
@@ -60,11 +52,11 @@ class HomePage(QWidget):
         self.hero_card.setObjectName("heroCard")
         self.page_layout.addWidget(self.hero_card)
 
-        self.eyebrow_label = QLabel("Curated kitchen workspace")
+        self.eyebrow_label = QLabel()
         self.eyebrow_label.setObjectName("eyebrowLabel")
         self.hero_card.content_layout.addWidget(self.eyebrow_label)
 
-        self.hero_title = QLabel("Cook beautifully, even before the first recipe lands.")
+        self.hero_title = QLabel()
         self.hero_title.setObjectName("heroTitle")
         self.hero_title.setWordWrap(True)
         self.hero_card.content_layout.addWidget(self.hero_title)
@@ -74,7 +66,7 @@ class HomePage(QWidget):
         self.hero_subtitle.setWordWrap(True)
         self.hero_card.content_layout.addWidget(self.hero_subtitle)
 
-        self.search_bar = SearchBar("Search recipes, ingredients, or inspiration")
+        self.search_bar = SearchBar("")
         self.search_bar.search_requested.connect(self._handle_search)
         self.search_bar.clear_requested.connect(self._clear_filters)
         self.hero_card.content_layout.addWidget(self.search_bar)
@@ -84,16 +76,15 @@ class HomePage(QWidget):
         self.hero_card.content_layout.addLayout(self.tag_row)
 
         self.active_filters_card = BaseCard()
-        self.active_filters_card.content_layout.addWidget(
-            SectionHeader("Active View", "Search and category filters are applied through the service layer.")
-        )
+        self.active_filters_header = SectionHeader("", "")
+        self.active_filters_card.content_layout.addWidget(self.active_filters_header)
         active_row = QHBoxLayout()
         active_row.setSpacing(12)
         self.active_filters_label = QLabel()
         self.active_filters_label.setObjectName("heroSubtitle")
         self.active_filters_label.setWordWrap(True)
         active_row.addWidget(self.active_filters_label, stretch=1)
-        self.clear_filters_button = QPushButton("Clear Filters")
+        self.clear_filters_button = QPushButton()
         self.clear_filters_button.setObjectName("secondaryButton")
         self.clear_filters_button.clicked.connect(self._clear_filters)
         active_row.addWidget(self.clear_filters_button)
@@ -101,18 +92,16 @@ class HomePage(QWidget):
         self.page_layout.addWidget(self.active_filters_card)
 
         self.category_section = BaseCard()
-        self.category_section.content_layout.addWidget(
-            SectionHeader("Browse Categories", "Loaded from your reference data in the active UI language.")
-        )
+        self.category_header = SectionHeader("", "")
+        self.category_section.content_layout.addWidget(self.category_header)
         self.category_row = QHBoxLayout()
         self.category_row.setSpacing(10)
         self.category_section.content_layout.addLayout(self.category_row)
         self.page_layout.addWidget(self.category_section)
 
         self.featured_section = BaseCard()
-        self.featured_section.content_layout.addWidget(
-            SectionHeader("Featured Recipes", "A premium landing strip for the first recipes you publish.")
-        )
+        self.featured_header = SectionHeader("", "")
+        self.featured_section.content_layout.addWidget(self.featured_header)
         self.featured_grid = QGridLayout()
         self.featured_grid.setHorizontalSpacing(16)
         self.featured_grid.setVerticalSpacing(16)
@@ -120,20 +109,15 @@ class HomePage(QWidget):
         self.page_layout.addWidget(self.featured_section)
 
         self.latest_section = BaseCard()
-        self.latest_section.content_layout.addWidget(
-            SectionHeader("Latest Recipes", "Modern data-bound cards designed for future details and editing flows.")
-        )
+        self.latest_header = SectionHeader("", "")
+        self.latest_section.content_layout.addWidget(self.latest_header)
         self.latest_grid = QGridLayout()
         self.latest_grid.setHorizontalSpacing(16)
         self.latest_grid.setVerticalSpacing(16)
         self.latest_section.content_layout.addLayout(self.latest_grid)
         self.page_layout.addWidget(self.latest_section)
 
-        self.empty_state = EmptyState(
-            "Your cookbook is structurally ready.",
-            "Categories, tags, language settings, and theme-aware layouts are already in place. "
-            "As soon as recipes are created, this becomes the discovery surface of the app.",
-        )
+        self.empty_state = EmptyState("", "")
         self.page_layout.addWidget(self.empty_state)
         self.active_filters_card.hide()
 
@@ -146,15 +130,44 @@ class HomePage(QWidget):
     def _apply_dashboard(self, dashboard: HomeDashboardData) -> None:
         self._search_text = dashboard.search_text
         self._selected_category_slug = dashboard.selected_category_slug
-        self.search_bar.set_language(dashboard.context.language_code, translate(dashboard.context.language_code, "home.search_placeholder"))
+        language_code = dashboard.context.language_code
+
+        self._apply_translations(language_code)
+        self.search_bar.set_language(language_code, translate(language_code, "home.search_placeholder"))
         self.hero_subtitle.setText(
-            f"{dashboard.context.profile_name}, your workspace is configured in {dashboard.context.language_code.upper()} and ready for a polished recipe experience."
+            translate(
+                language_code,
+                "home.subtitle",
+                profile_name=dashboard.context.profile_name,
+                language_name=language_label(language_code),
+            )
         )
         self.search_bar.set_text(dashboard.search_text)
         self._populate_tags(dashboard)
         self._populate_categories(dashboard)
         self._update_active_filters(dashboard)
         self._render_recipe_sections(dashboard.latest_recipes, dashboard.featured_recipes)
+
+    def _apply_translations(self, language_code: str) -> None:
+        self.eyebrow_label.setText(translate(language_code, "home.eyebrow"))
+        self.hero_title.setText(translate(language_code, "home.title"))
+        self.active_filters_header.set_content(
+            translate(language_code, "home.active_view_title"),
+            translate(language_code, "home.active_view_subtitle"),
+        )
+        self.clear_filters_button.setText(translate(language_code, "home.clear_filters"))
+        self.category_header.set_content(
+            translate(language_code, "home.browse_categories_title"),
+            translate(language_code, "home.browse_categories_subtitle"),
+        )
+        self.featured_header.set_content(
+            translate(language_code, "home.featured_title"),
+            translate(language_code, "home.featured_subtitle"),
+        )
+        self.latest_header.set_content(
+            translate(language_code, "home.latest_title"),
+            translate(language_code, "home.latest_subtitle"),
+        )
 
     def _populate_tags(self, dashboard: HomeDashboardData) -> None:
         self._clear_box(self.tag_row)
@@ -166,8 +179,9 @@ class HomePage(QWidget):
 
     def _populate_categories(self, dashboard: HomeDashboardData) -> None:
         self._clear_box(self.category_row)
+        language_code = dashboard.context.language_code
 
-        all_chip = CategoryChip("all", "All")
+        all_chip = CategoryChip("all", translate(language_code, "home.category.all"))
         all_chip.setChecked(self._selected_category_slug in {None, "all"})
         all_chip.selected_changed.connect(self._handle_category_selected)
         self.category_row.addWidget(all_chip)
@@ -181,10 +195,7 @@ class HomePage(QWidget):
         self.category_row.addStretch(1)
 
     def _handle_category_selected(self, slug: str, checked: bool) -> None:
-        if slug == "all":
-            self._selected_category_slug = None
-        else:
-            self._selected_category_slug = slug if checked else None
+        self._selected_category_slug = None if slug == "all" else (slug if checked else None)
         self._refresh_filtered_dashboard()
 
     def _handle_search(self, query_text: str) -> None:
@@ -209,31 +220,29 @@ class HomePage(QWidget):
             self.active_filters_card.hide()
             return
 
+        language_code = dashboard.context.language_code
         parts: list[str] = []
         if dashboard.search_text:
-            parts.append(f'Search: "{dashboard.search_text}"')
+            parts.append(translate(language_code, "home.filter.search", value=dashboard.search_text))
         if dashboard.selected_category_name:
-            parts.append(f"Category: {dashboard.selected_category_name}")
+            parts.append(translate(language_code, "home.filter.category", value=dashboard.selected_category_name))
         self.active_filters_label.setText(" • ".join(parts))
         self.active_filters_card.show()
 
-    def _render_recipe_sections(
-        self,
-        recipes: list[RecipeListItem],
-        featured_recipes: list[RecipeListItem],
-    ) -> None:
+    def _render_recipe_sections(self, recipes: list[RecipeListItem], featured_recipes: list[RecipeListItem]) -> None:
         self._clear_grid(self.featured_grid)
         self._clear_grid(self.latest_grid)
+        language_code = self._dashboard_data.context.language_code if self._dashboard_data else "en"
 
         for index, recipe in enumerate(featured_recipes[:3]):
-            card = RecipeCard(recipe, self.image_service, dashboard.context.language_code)
+            card = RecipeCard(recipe, self.image_service, language_code)
             card.clicked.connect(self.recipe_selected.emit)
             self.featured_grid.addWidget(card, 0, index)
 
         for index, recipe in enumerate(recipes):
             row = index // 3
             column = index % 3
-            card = RecipeCard(recipe, self.image_service, self._dashboard_data.context.language_code if self._dashboard_data else "en")
+            card = RecipeCard(recipe, self.image_service, language_code)
             card.clicked.connect(self.recipe_selected.emit)
             self.latest_grid.addWidget(card, row, column)
 
@@ -243,16 +252,15 @@ class HomePage(QWidget):
         if not has_recipes:
             if self._dashboard_data is not None and self._dashboard_data.has_active_filters:
                 self.empty_state.set_content(
-                    "No recipes match the current view.",
-                    "Try clearing the search, switching categories, or broadening the phrase to bring recipes back into view.",
-                    badge_text="No matching results",
+                    translate(language_code, "home.no_matches_title"),
+                    translate(language_code, "home.no_matches_description"),
+                    badge_text=translate(language_code, "home.no_matches_badge"),
                 )
             else:
                 self.empty_state.set_content(
-                    "Your cookbook is structurally ready.",
-                    "Categories, tags, language settings, and theme-aware layouts are already in place. "
-                    "As soon as recipes are created, this becomes the discovery surface of the app.",
-                    badge_text="No recipes yet",
+                    translate(language_code, "home.empty_title"),
+                    translate(language_code, "home.empty_description"),
+                    badge_text=translate(language_code, "home.empty_badge"),
                 )
         self.empty_state.setVisible(not has_recipes)
 

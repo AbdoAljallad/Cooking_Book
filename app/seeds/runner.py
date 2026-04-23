@@ -211,6 +211,7 @@ def _seed_categories(session: Session, languages_by_code: dict[str, Language]) -
 
         _sync_category_translation(session, category, languages_by_code["en"], item["en"])
         _sync_category_translation(session, category, languages_by_code["ar"], item["ar"])
+        _sync_category_translation(session, category, languages_by_code["ru"], item["ru"])
 
 
 def _seed_units(session: Session, languages_by_code: dict[str, Language]) -> None:
@@ -235,6 +236,7 @@ def _seed_units(session: Session, languages_by_code: dict[str, Language]) -> Non
 
         _sync_unit_translation(session, unit, languages_by_code["en"], item["en"])
         _sync_unit_translation(session, unit, languages_by_code["ar"], item["ar"])
+        _sync_unit_translation(session, unit, languages_by_code["ru"], item["ru"])
 
 
 def _seed_tags(session: Session, languages_by_code: dict[str, Language]) -> None:
@@ -252,6 +254,7 @@ def _seed_tags(session: Session, languages_by_code: dict[str, Language]) -> None
 
         _sync_tag_translation(session, tag, languages_by_code["en"], item["en"])
         _sync_tag_translation(session, tag, languages_by_code["ar"], item["ar"])
+        _sync_tag_translation(session, tag, languages_by_code["ru"], item["ru"])
 
 
 def seed_reference_data(session: Session) -> SeedSummary:

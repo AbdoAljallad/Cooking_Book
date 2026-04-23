@@ -28,6 +28,7 @@ from app.services.models import (
     RecipeIngredientDetail,
     RecipeStepDetail,
 )
+from app.utils.i18n import translate
 
 
 class RecipeValidationError(ValueError):
@@ -214,7 +215,7 @@ class RecipeService(BaseService):
 
                 if input_data.image_input is not None:
                     if self.image_service is None:
-                        raise RecipeValidationError("Image handling is not configured for this recipe service.")
+                        raise RecipeValidationError(translate("en", "service.validation.image_not_configured"))
                     try:
                         recipe.image_path = self.image_service.store_recipe_image(recipe.id, input_data.image_input)
                     except ImageValidationError as exc:
@@ -247,7 +248,7 @@ class RecipeService(BaseService):
 
         ingredients = []
         for ingredient in recipe.ingredients:
-            ingredient_name = "Custom ingredient"
+            ingredient_name = translate(language_code, "service.recipe.custom_ingredient")
             if ingredient.ingredient is not None:
                 ingredient_translation = self._pick_translation(
                     ingredient.ingredient.translations,
@@ -290,7 +291,7 @@ class RecipeService(BaseService):
             steps.append(
                 RecipeStepDetail(
                     sort_order=step.sort_order,
-                    instruction=step_translation.instruction if step_translation is not None else "Step content unavailable.",
+                    instruction=step_translation.instruction if step_translation is not None else translate(language_code, "service.recipe.step_unavailable"),
                     estimated_minutes=step.estimated_minutes,
                 )
             )
@@ -314,7 +315,7 @@ class RecipeService(BaseService):
 
         details = RecipeDetailsData(
             id=recipe.id,
-            title=translation.title if translation is not None else "Untitled recipe",
+            title=translation.title if translation is not None else translate(language_code, "service.recipe.untitled"),
             short_description=translation.short_description if translation is not None else None,
             image_path=recipe.image_path,
             category_name=(
@@ -404,7 +405,7 @@ class RecipeService(BaseService):
         if profile_id is None:
             return None
         if rating is not None and not 1 <= rating <= 5:
-            raise RecipeValidationError("Rating must be between 1 and 5.")
+            raise RecipeValidationError(translate("en", "service.validation.rating_range"))
         with self._open_session() as session:
             try:
                 saved = RecipeRepository(session).save_rating(recipe_id, profile_id, rating)
@@ -503,7 +504,7 @@ class RecipeService(BaseService):
         if unit_label:
             parts.append(unit_label)
 
-        return " ".join(parts) if parts else "As needed"
+        return " ".join(parts) if parts else translate("en", "service.recipe.as_needed")
 
     @staticmethod
     def _coerce_servings_decimal(value: Decimal | int | float) -> Decimal:
@@ -588,26 +589,26 @@ class RecipeService(BaseService):
 
     def _validate_create_input(self, input_data: CreateRecipeInput) -> None:
         if not input_data.title_en.strip():
-            raise RecipeValidationError("English title is required.")
+            raise RecipeValidationError(translate("en", "service.validation.title_required"))
         if not input_data.category_id or input_data.category_id <= 0:
-            raise RecipeValidationError("A category must be selected.")
+            raise RecipeValidationError(translate("en", "service.validation.category_required"))
         if input_data.prep_time_minutes < 0 or input_data.cook_time_minutes < 0:
-            raise RecipeValidationError("Prep and cook time must be zero or greater.")
+            raise RecipeValidationError(translate("en", "service.validation.time_non_negative"))
         if input_data.base_servings <= 0:
-            raise RecipeValidationError("Base servings must be greater than zero.")
+            raise RecipeValidationError(translate("en", "service.validation.servings_positive"))
         if not input_data.ingredients:
-            raise RecipeValidationError("At least one ingredient is required.")
+            raise RecipeValidationError(translate("en", "service.validation.ingredient_required"))
         if not input_data.steps:
-            raise RecipeValidationError("At least one step is required.")
+            raise RecipeValidationError(translate("en", "service.validation.step_required"))
 
         for ingredient in input_data.ingredients:
             if not ingredient.name_en.strip():
-                raise RecipeValidationError("Each ingredient requires an English name.")
+                raise RecipeValidationError(translate("en", "service.validation.ingredient_name_required"))
             if ingredient.quantity is not None and ingredient.quantity < 0:
-                raise RecipeValidationError("Ingredient quantities must be zero or greater.")
+                raise RecipeValidationError(translate("en", "service.validation.ingredient_quantity_non_negative"))
 
         for step in input_data.steps:
             if not step.instruction_en.strip():
-                raise RecipeValidationError("Each step requires an English instruction.")
+                raise RecipeValidationError(translate("en", "service.validation.step_instruction_required"))
             if step.estimated_minutes is not None and step.estimated_minutes < 0:
-                raise RecipeValidationError("Step estimated minutes must be zero or greater.")
+                raise RecipeValidationError(translate("en", "service.validation.step_minutes_non_negative"))

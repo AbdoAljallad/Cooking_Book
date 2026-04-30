@@ -79,6 +79,7 @@ class RecipeDetailsData:
 class CreateRecipeIngredientInput:
     name_en: str
     name_ar: str | None
+    name_ru: str | None
     quantity: Decimal | None
     unit_id: int | None
     is_scalable: bool
@@ -90,6 +91,7 @@ class CreateRecipeIngredientInput:
 class CreateRecipeStepInput:
     instruction_en: str
     instruction_ar: str | None
+    instruction_ru: str | None
     estimated_minutes: int | None
 
 
@@ -97,8 +99,10 @@ class CreateRecipeStepInput:
 class CreateRecipeInput:
     title_en: str
     title_ar: str | None
+    title_ru: str | None
     short_description_en: str | None
     short_description_ar: str | None
+    short_description_ru: str | None
     category_id: int
     image_path: str | None
     prep_time_minutes: int

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from threading import Thread
-
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -17,11 +15,12 @@ from PySide6.QtWidgets import (
 )
 
 from app.config.settings import AppSettings
-from app.database.health import DatabaseHealthResult, check_database_connection
+from app.database.health import DatabaseHealthResult
 from app.services import (
     AppContext,
     AppContextService,
     CategoryService,
+    DatabaseStatusService,
     HomeService,
     ImageService,
     RecipeService,
@@ -29,8 +28,10 @@ from app.services import (
     TagService,
     UnitService,
 )
+from app.ui.components.side_nav import NavItem, SideNav
 from app.ui.themes.manager import ThemeManager
 from app.ui.windows.add_recipe_page import AddRecipePage
+from app.ui.windows.categories_page import CategoriesPage
 from app.ui.windows.favorites_page import FavoritesPage
 from app.ui.windows.home_page import HomePage
 from app.ui.windows.recipe_details_page import RecipeDetailsPage
@@ -38,16 +39,12 @@ from app.ui.windows.settings_page import SettingsPage
 from app.utils.i18n import translate
 
 
-class DatabaseHealthSignals(QObject):
-    finished = Signal(object)
-
-
 class MainWindow(QMainWindow):
     def __init__(self, settings: AppSettings, theme_manager: ThemeManager) -> None:
         super().__init__()
         self.settings = settings
         self.theme_manager = theme_manager
-        self.database_health_signals = DatabaseHealthSignals()
+        self.database_status_service = DatabaseStatusService(settings.database)
         self.context_service = AppContextService(settings=settings)
         self.current_context = self.context_service.get_context()
         self.image_service = ImageService()
@@ -69,8 +66,9 @@ class MainWindow(QMainWindow):
 
         self._apply_context(self.current_context)
         self._build_ui()
-        self._start_database_health_check()
+        self._start_database_monitor()
         self._return_page = None
+        self._active_page_key = "home"
 
     def _apply_layout_direction(self, direction: str) -> None:
         qt_direction = Qt.RightToLeft if direction == "rtl" else Qt.LeftToRight
@@ -115,22 +113,12 @@ class MainWindow(QMainWindow):
         self.add_recipe_button.clicked.connect(self._show_add_recipe_page)
         top_bar.addWidget(self.add_recipe_button, alignment=Qt.AlignmentFlag.AlignVCenter)
 
-        self.favorites_button = QPushButton("Favorites")
-        self.favorites_button.setObjectName("secondaryButton")
-        self.favorites_button.clicked.connect(self._show_favorites_page)
-        top_bar.addWidget(self.favorites_button, alignment=Qt.AlignmentFlag.AlignVCenter)
-
         self.theme_selector = QComboBox()
         self.theme_selector.addItems(self.theme_manager.available_themes())
         self.theme_selector.setCurrentText(self.current_context.theme_name)
         self.theme_selector.currentTextChanged.connect(self._on_theme_changed)
         self.theme_selector.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         top_bar.addWidget(self.theme_selector, alignment=Qt.AlignmentFlag.AlignVCenter)
-
-        self.settings_button = QPushButton("Settings")
-        self.settings_button.setObjectName("secondaryButton")
-        self.settings_button.clicked.connect(self._show_settings_page)
-        top_bar.addWidget(self.settings_button, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         layout.addLayout(top_bar)
 
@@ -162,6 +150,8 @@ class MainWindow(QMainWindow):
         self.settings_page.back_requested.connect(self._show_home_page)
         self.settings_page.settings_applied.connect(self._handle_settings_applied)
 
+        self.categories_page = CategoriesPage(self.context_service)
+
         self.recipe_details_page = RecipeDetailsPage(
             recipe_service=self.recipe_service,
             context_service=self.context_service,
@@ -169,13 +159,30 @@ class MainWindow(QMainWindow):
         )
         self.recipe_details_page.back_requested.connect(self._return_from_details)
 
+        content_shell = QHBoxLayout()
+        content_shell.setSpacing(18)
+        self.side_nav = SideNav(
+            [
+                NavItem("home", "nav.home", "H"),
+                NavItem("add", "nav.add_recipe", "+"),
+                NavItem("favorites", "nav.favorites", "*"),
+                NavItem("categories", "nav.categories", "C"),
+                NavItem("settings", "nav.settings", "S"),
+            ]
+        )
+        self.side_nav.setFixedWidth(230)
+        self.side_nav.page_requested.connect(self._show_page)
+        content_shell.addWidget(self.side_nav)
+
         self.page_stack = QStackedWidget()
         self.page_stack.addWidget(self.home_page)
         self.page_stack.addWidget(self.favorites_page)
         self.page_stack.addWidget(self.add_recipe_page)
+        self.page_stack.addWidget(self.categories_page)
         self.page_stack.addWidget(self.settings_page)
         self.page_stack.addWidget(self.recipe_details_page)
-        layout.addWidget(self.page_stack, stretch=1)
+        content_shell.addWidget(self.page_stack, stretch=1)
+        layout.addLayout(content_shell, stretch=1)
 
         self.setCentralWidget(root)
         self._refresh_texts()
@@ -185,13 +192,10 @@ class MainWindow(QMainWindow):
         self.connection_badge.style().unpolish(self.connection_badge)
         self.connection_badge.style().polish(self.connection_badge)
 
-    def _start_database_health_check(self) -> None:
-        self.database_health_signals.finished.connect(self._update_database_status)
-        Thread(target=self._run_database_health_check, daemon=True).start()
-
-    def _run_database_health_check(self) -> None:
-        result = check_database_connection()
-        self.database_health_signals.finished.emit(result)
+    def _start_database_monitor(self) -> None:
+        self.database_status_service.status_checked.connect(self._update_database_status)
+        self.database_status_service.status_changed.connect(self._handle_database_status_changed)
+        self.database_status_service.start()
 
     def _update_database_status(self, result: DatabaseHealthResult) -> None:
         if result.ok:
@@ -203,6 +207,10 @@ class MainWindow(QMainWindow):
         self.connection_badge.setText(translate(self.current_context.language_code, "status.database_unavailable"))
         self._set_status_badge("error")
         self.connection_badge.setToolTip(result.error or result.message)
+
+    def _handle_database_status_changed(self, result: DatabaseHealthResult) -> None:
+        if result.ok:
+            self._refresh_active_page()
 
     def _on_theme_changed(self, theme_name: str) -> None:
         application = QApplication.instance()
@@ -237,14 +245,20 @@ class MainWindow(QMainWindow):
         self.page_stack.setCurrentWidget(self.recipe_details_page)
 
     def _show_home_page(self) -> None:
+        self._active_page_key = "home"
+        self.side_nav.set_active("home")
         self.home_page.reload()
         self.page_stack.setCurrentWidget(self.home_page)
 
     def _show_favorites_page(self) -> None:
+        self._active_page_key = "favorites"
+        self.side_nav.set_active("favorites")
         self.favorites_page.reload()
         self.page_stack.setCurrentWidget(self.favorites_page)
 
     def _show_settings_page(self) -> None:
+        self._active_page_key = "settings"
+        self.side_nav.set_active("settings")
         self.settings_page.reload()
         self.page_stack.setCurrentWidget(self.settings_page)
 
@@ -255,8 +269,37 @@ class MainWindow(QMainWindow):
         self._show_home_page()
 
     def _show_add_recipe_page(self) -> None:
+        self._active_page_key = "add"
+        self.side_nav.set_active("add")
         self.add_recipe_page.load_form_options()
         self.page_stack.setCurrentWidget(self.add_recipe_page)
+
+    def _show_categories_page(self) -> None:
+        self._active_page_key = "categories"
+        self.side_nav.set_active("categories")
+        self.categories_page.reload()
+        self.page_stack.setCurrentWidget(self.categories_page)
+
+    def _show_page(self, key: str) -> None:
+        if key == "home":
+            self._show_home_page()
+        elif key == "add":
+            self._show_add_recipe_page()
+        elif key == "favorites":
+            self._show_favorites_page()
+        elif key == "categories":
+            self._show_categories_page()
+        elif key == "settings":
+            self._show_settings_page()
+
+    def _refresh_active_page(self) -> None:
+        widget = self.page_stack.currentWidget()
+        if hasattr(widget, "reload"):
+            widget.reload()
+        elif widget is self.add_recipe_page:
+            self.add_recipe_page.load_form_options()
+        elif widget is self.recipe_details_page:
+            self.recipe_details_page.refresh_language()
 
     def _handle_recipe_created(self, recipe_id: int) -> None:
         self.home_page.reload()
@@ -272,6 +315,7 @@ class MainWindow(QMainWindow):
         self.favorites_page.reload()
         self.add_recipe_page.load_form_options()
         self.recipe_details_page.refresh_language()
+        self.categories_page.reload()
 
     def _refresh_texts(self) -> None:
         language_code = self.current_context.language_code
@@ -279,8 +323,8 @@ class MainWindow(QMainWindow):
         self.product_name.setText(translate(language_code, "app.title"))
         self.product_caption.setText(translate(language_code, "app.subtitle"))
         self.add_recipe_button.setText(translate(language_code, "nav.add_recipe"))
-        self.favorites_button.setText(translate(language_code, "nav.favorites"))
-        self.settings_button.setText(translate(language_code, "nav.settings"))
+        self.side_nav.set_language(language_code)
+        self.side_nav.set_active(getattr(self, "_active_page_key", "home"))
         status = self.connection_badge.property("status")
         if status == "checking":
             self.connection_badge.setText(translate(language_code, "status.database_checking"))

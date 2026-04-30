@@ -143,6 +143,11 @@ class AddRecipePage(QWidget):
         self.title_ar_label = QLabel()
         form.addRow(self.title_ar_label, self.title_ar_input)
 
+        self.title_ru_input = QLineEdit()
+        self.title_ru_input.setObjectName("searchInput")
+        self.title_ru_label = QLabel()
+        form.addRow(self.title_ru_label, self.title_ru_input)
+
         self.description_en_input = QTextEdit()
         self.description_en_input.setObjectName("multilineField")
         self.description_en_input.setFixedHeight(86)
@@ -154,6 +159,12 @@ class AddRecipePage(QWidget):
         self.description_ar_input.setFixedHeight(86)
         self.description_ar_label = QLabel()
         form.addRow(self.description_ar_label, self.description_ar_input)
+
+        self.description_ru_input = QTextEdit()
+        self.description_ru_input.setObjectName("multilineField")
+        self.description_ru_input.setFixedHeight(86)
+        self.description_ru_label = QLabel()
+        form.addRow(self.description_ru_label, self.description_ru_input)
 
         card.content_layout.addLayout(form)
         self.image_input_card = RecipeImageInputCard(self.image_service)
@@ -268,8 +279,10 @@ class AddRecipePage(QWidget):
         )
         self.title_en_label.setText(translate(language_code, "add_recipe.field.title_en"))
         self.title_ar_label.setText(translate(language_code, "add_recipe.field.title_ar"))
+        self.title_ru_label.setText(translate(language_code, "add_recipe.field.title_ru"))
         self.description_en_label.setText(translate(language_code, "add_recipe.field.description_en"))
         self.description_ar_label.setText(translate(language_code, "add_recipe.field.description_ar"))
+        self.description_ru_label.setText(translate(language_code, "add_recipe.field.description_ru"))
         self.metadata_header.set_content(
             translate(language_code, "add_recipe.metadata_title"),
             translate(language_code, "add_recipe.metadata_subtitle"),
@@ -314,8 +327,10 @@ class AddRecipePage(QWidget):
     def _reset_static_fields(self) -> None:
         self.title_en_input.clear()
         self.title_ar_input.clear()
+        self.title_ru_input.clear()
         self.description_en_input.clear()
         self.description_ar_input.clear()
+        self.description_ru_input.clear()
         self.image_input_card.clear_selection()
         self.prep_time_input.setValue(0)
         self.cook_time_input.setValue(0)
@@ -403,8 +418,10 @@ class AddRecipePage(QWidget):
         return CreateRecipeInput(
             title_en=self.title_en_input.text(),
             title_ar=self.title_ar_input.text() or None,
+            title_ru=self.title_ru_input.text() or None,
             short_description_en=self.description_en_input.toPlainText() or None,
             short_description_ar=self.description_ar_input.toPlainText() or None,
+            short_description_ru=self.description_ru_input.toPlainText() or None,
             category_id=self.category_combo.currentData(),
             image_path=None,
             prep_time_minutes=self.prep_time_input.value(),

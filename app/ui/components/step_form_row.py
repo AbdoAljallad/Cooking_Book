@@ -51,6 +51,12 @@ class StepFormRow(QWidget):
         self.instruction_ar_input.setFixedHeight(88)
         layout.addWidget(self.instruction_ar_input, 1, 2, 1, 2)
 
+        self.instruction_ru_input = QTextEdit()
+        self.instruction_ru_input.setObjectName("multilineField")
+        self.instruction_ru_input.setPlaceholderText("")
+        self.instruction_ru_input.setFixedHeight(88)
+        layout.addWidget(self.instruction_ru_input, 2, 0, 1, 4)
+
         self.estimated_minutes_input = QSpinBox()
         self.estimated_minutes_input.setObjectName("spinField")
         self.estimated_minutes_input.setMinimum(0)
@@ -69,11 +75,13 @@ class StepFormRow(QWidget):
         self.remove_button.setText(translate(language_code, "step.remove"))
         self.instruction_en_input.setPlaceholderText(translate(language_code, "step.instruction_en"))
         self.instruction_ar_input.setPlaceholderText(translate(language_code, "step.instruction_ar"))
+        self.instruction_ru_input.setPlaceholderText(translate(language_code, "step.instruction_ru"))
 
     def to_input(self) -> CreateRecipeStepInput:
         estimated = self.estimated_minutes_input.value()
         return CreateRecipeStepInput(
             instruction_en=self.instruction_en_input.toPlainText(),
             instruction_ar=self.instruction_ar_input.toPlainText() or None,
+            instruction_ru=self.instruction_ru_input.toPlainText() or None,
             estimated_minutes=estimated if estimated > 0 else None,
         )

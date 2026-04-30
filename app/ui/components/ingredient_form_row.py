@@ -42,6 +42,11 @@ class IngredientFormRow(QWidget):
         self.name_ar_input.setPlaceholderText("")
         layout.addWidget(self.name_ar_input, 0, 2, 1, 2)
 
+        self.name_ru_input = QLineEdit()
+        self.name_ru_input.setObjectName("searchInput")
+        self.name_ru_input.setPlaceholderText("")
+        layout.addWidget(self.name_ru_input, 1, 0, 1, 2)
+
         self.quantity_input = QDoubleSpinBox()
         self.quantity_input.setObjectName("spinField")
         self.quantity_input.setDecimals(3)
@@ -49,33 +54,33 @@ class IngredientFormRow(QWidget):
         self.quantity_input.setMinimum(0)
         self.quantity_input.setSpecialValueText("")
         self.quantity_input.setValue(0)
-        layout.addWidget(self.quantity_input, 1, 0)
+        layout.addWidget(self.quantity_input, 2, 0)
 
         self.unit_combo = QComboBox()
         self.unit_combo.setObjectName("comboField")
         self.unit_combo.addItem("", None)
         for unit_id, label in units:
             self.unit_combo.addItem(label, unit_id)
-        layout.addWidget(self.unit_combo, 1, 1)
+        layout.addWidget(self.unit_combo, 2, 1)
 
         self.quantity_override_input = QLineEdit()
         self.quantity_override_input.setObjectName("searchInput")
         self.quantity_override_input.setPlaceholderText("")
-        layout.addWidget(self.quantity_override_input, 1, 2)
+        layout.addWidget(self.quantity_override_input, 2, 2)
 
         self.preparation_note_input = QLineEdit()
         self.preparation_note_input.setObjectName("searchInput")
         self.preparation_note_input.setPlaceholderText("")
-        layout.addWidget(self.preparation_note_input, 1, 3)
+        layout.addWidget(self.preparation_note_input, 2, 3)
 
         self.scalable_checkbox = QCheckBox()
         self.scalable_checkbox.setChecked(True)
-        layout.addWidget(self.scalable_checkbox, 2, 0)
+        layout.addWidget(self.scalable_checkbox, 3, 0)
 
         self.remove_button = QPushButton()
         self.remove_button.setObjectName("secondaryButton")
         self.remove_button.clicked.connect(lambda: self.remove_requested.emit(self))
-        layout.addWidget(self.remove_button, 2, 3)
+        layout.addWidget(self.remove_button, 3, 3)
 
         self.set_language("en")
 
@@ -83,6 +88,7 @@ class IngredientFormRow(QWidget):
         self._language_code = language_code
         self.name_en_input.setPlaceholderText(translate(language_code, "ingredient.name_en"))
         self.name_ar_input.setPlaceholderText(translate(language_code, "ingredient.name_ar"))
+        self.name_ru_input.setPlaceholderText(translate(language_code, "ingredient.name_ru"))
         self.quantity_override_input.setPlaceholderText(translate(language_code, "ingredient.quantity_override"))
         self.preparation_note_input.setPlaceholderText(translate(language_code, "ingredient.preparation_note"))
         self.scalable_checkbox.setText(translate(language_code, "ingredient.scalable"))
@@ -94,6 +100,7 @@ class IngredientFormRow(QWidget):
         return CreateRecipeIngredientInput(
             name_en=self.name_en_input.text(),
             name_ar=self.name_ar_input.text() or None,
+            name_ru=self.name_ru_input.text() or None,
             quantity=quantity,
             unit_id=self.unit_combo.currentData(),
             is_scalable=self.scalable_checkbox.isChecked(),

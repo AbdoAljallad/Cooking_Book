@@ -1,5 +1,6 @@
 from app.services.app_context_service import AppContextService
 from app.services.category_service import CategoryService
+from app.services.database_status_service import DatabaseStatusService
 from app.services.home_service import HomeService
 from app.services.image_service import ImageService, RecipeImageInput
 from app.services.models import (
@@ -25,6 +26,7 @@ __all__ = [
     "AppContext",
     "AppContextService",
     "CategoryService",
+    "DatabaseStatusService",
     "CreateRecipeFormData",
     "CreateRecipeIngredientInput",
     "CreateRecipeInput",

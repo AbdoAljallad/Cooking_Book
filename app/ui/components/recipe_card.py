@@ -1,6 +1,6 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QLabel, QWidget
+from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
 
 from app.repositories import RecipeListItem
 from app.services.image_service import ImageService
@@ -10,6 +10,8 @@ from app.utils.i18n import translate
 
 class RecipeCard(BaseCard):
     clicked = Signal(int)
+    IMAGE_WIDTH = 320
+    IMAGE_HEIGHT = 174
 
     def __init__(
         self,
@@ -25,17 +27,12 @@ class RecipeCard(BaseCard):
 
         image_label = QLabel()
         image_label.setObjectName("recipeImage")
-        image_label.setMinimumHeight(150)
+        image_label.setFixedHeight(self.IMAGE_HEIGHT)
+        image_label.setMinimumWidth(self.IMAGE_WIDTH)
+        image_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         image_path = image_service.resolve_display_path(recipe.image_path)
-        image_label.setPixmap(
-            QPixmap(str(image_path)).scaled(
-                420,
-                150,
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-        )
+        image_label.setPixmap(self._cover_pixmap(QPixmap(str(image_path)), self.IMAGE_WIDTH, self.IMAGE_HEIGHT))
         self.content_layout.addWidget(image_label)
 
         category_label = QLabel(recipe.category_name or recipe.category_slug.replace("_", " ").title())
@@ -70,3 +67,17 @@ class RecipeCard(BaseCard):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit(self.recipe.id)
         super().mousePressEvent(event)
+
+    @staticmethod
+    def _cover_pixmap(pixmap: QPixmap, width: int, height: int) -> QPixmap:
+        if pixmap.isNull():
+            return QPixmap()
+        scaled = pixmap.scaled(
+            width,
+            height,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        x = max((scaled.width() - width) // 2, 0)
+        y = max((scaled.height() - height) // 2, 0)
+        return scaled.copy(x, y, min(width, scaled.width()), min(height, scaled.height()))

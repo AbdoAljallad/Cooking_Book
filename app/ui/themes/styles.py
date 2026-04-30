@@ -74,6 +74,43 @@ def build_stylesheet(theme: ThemeDefinition) -> str:
         border-radius: {radii.lg}px;
     }}
 
+    QWidget#sideNav {{
+        background-color: {colors.surface};
+        border: 1px solid {colors.border};
+        border-radius: {radii.lg}px;
+    }}
+
+    QLabel#navSectionLabel {{
+        color: {colors.text_secondary};
+        font-family: "{typography.family_display}";
+        font-size: {typography.size_caption}px;
+        font-weight: 700;
+        padding: {spacing.sm}px {spacing.md}px;
+    }}
+
+    QPushButton#navButton {{
+        background-color: transparent;
+        color: {colors.text_secondary};
+        border: 1px solid transparent;
+        border-radius: {radii.md}px;
+        min-height: 42px;
+        padding: 0 {spacing.md}px;
+        text-align: left;
+        font-weight: 700;
+    }}
+
+    QPushButton#navButton:hover {{
+        color: {colors.text_primary};
+        background-color: {colors.surface_alt};
+        border-color: {colors.border};
+    }}
+
+    QPushButton#navButton[active="true"] {{
+        color: {colors.background};
+        background-color: {colors.accent};
+        border-color: {colors.accent};
+    }}
+
     QFrame#imageDropCard {{
         background-color: {colors.surface};
         border: 1px solid {colors.border};
@@ -92,7 +129,8 @@ def build_stylesheet(theme: ThemeDefinition) -> str:
     }}
 
     QFrame#recipeCard {{
-        min-height: 200px;
+        min-height: 380px;
+        max-width: 390px;
     }}
 
     QLabel#recipeCardTitle {{

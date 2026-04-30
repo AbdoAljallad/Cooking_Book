@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QFont, QImage, QImageReader, QPainter
+from PySide6.QtGui import QColor, QFont, QImage, QImageReader, QLinearGradient, QPainter
 
 from app.config.settings import BASE_DIR
 
@@ -67,15 +67,15 @@ class ImageService:
         return destination.relative_to(self.base_dir).as_posix()
 
     def ensure_placeholder_image(self) -> Path:
-        if self.placeholder_path.exists():
-            return self.placeholder_path
-
         image = QImage(1200, 800, QImage.Format.Format_ARGB32)
-        image.fill(QColor("#D7DEE8"))
+        gradient = QLinearGradient(0, 0, 1200, 800)
+        gradient.setColorAt(0, QColor("#EEF2F7"))
+        gradient.setColorAt(1, QColor("#B9C5D6"))
         painter = QPainter(image)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.fillRect(image.rect(), gradient)
         painter.setPen(QColor("#4B5A6E"))
-        font = QFont("Segoe UI", 44)
+        font = QFont("Segoe UI", 48)
         font.setBold(True)
         painter.setFont(font)
         painter.drawText(image.rect(), Qt.AlignmentFlag.AlignCenter, "No Image")

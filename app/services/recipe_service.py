@@ -129,6 +129,7 @@ class RecipeService(BaseService):
             try:
                 english = self._get_language(session, "en")
                 arabic = self._get_language(session, "ar")
+                russian = self._get_language(session, "ru")
 
                 recipe = Recipe(
                     category_id=input_data.category_id,
@@ -143,21 +144,17 @@ class RecipeService(BaseService):
                 )
                 RecipeRepository(session).add(recipe)
 
-                session.add(
-                    RecipeTranslation(
-                        recipe_id=recipe.id,
-                        language_id=english.id,
-                        title=input_data.title_en.strip(),
-                        short_description=self._clean_optional_text(input_data.short_description_en),
-                    )
-                )
-                if self._clean_optional_text(input_data.title_ar):
+                for language, title, description in (
+                    (english, input_data.title_en, input_data.short_description_en),
+                    (arabic, input_data.title_ar, input_data.short_description_ar),
+                    (russian, input_data.title_ru, input_data.short_description_ru),
+                ):
                     session.add(
                         RecipeTranslation(
                             recipe_id=recipe.id,
-                            language_id=arabic.id,
-                            title=input_data.title_ar.strip(),
-                            short_description=self._clean_optional_text(input_data.short_description_ar),
+                            language_id=language.id,
+                            title=title.strip() if title is not None else "",
+                            short_description=self._clean_optional_text(description),
                         )
                     )
 
@@ -171,8 +168,10 @@ class RecipeService(BaseService):
                         ingredient_repository=ingredient_repository,
                         english_language_id=english.id,
                         arabic_language_id=arabic.id,
+                        russian_language_id=russian.id,
                         name_en=ingredient_input.name_en,
                         name_ar=ingredient_input.name_ar,
+                        name_ru=ingredient_input.name_ru,
                         default_unit_id=ingredient_input.unit_id,
                     )
                     session.add(
@@ -210,6 +209,14 @@ class RecipeService(BaseService):
                                 recipe_step_id=step.id,
                                 language_id=arabic.id,
                                 instruction=step_input.instruction_ar.strip(),
+                            )
+                        )
+                    if self._clean_optional_text(step_input.instruction_ru):
+                        session.add(
+                            RecipeStepTranslation(
+                                recipe_step_id=step.id,
+                                language_id=russian.id,
+                                instruction=step_input.instruction_ru.strip(),
                             )
                         )
 
@@ -526,16 +533,21 @@ class RecipeService(BaseService):
         ingredient_repository: IngredientRepository,
         english_language_id: int,
         arabic_language_id: int,
+        russian_language_id: int,
         name_en: str,
         name_ar: str | None,
+        name_ru: str | None,
         default_unit_id: int | None,
     ) -> Ingredient:
         cleaned_en = name_en.strip()
         cleaned_ar = self._clean_optional_text(name_ar)
+        cleaned_ru = self._clean_optional_text(name_ru)
 
         ingredient = ingredient_repository.get_by_translation_name(cleaned_en, "en")
         if ingredient is None and cleaned_ar:
             ingredient = ingredient_repository.get_by_translation_name(cleaned_ar, "ar")
+        if ingredient is None and cleaned_ru:
+            ingredient = ingredient_repository.get_by_translation_name(cleaned_ru, "ru")
 
         if ingredient is not None:
             if ingredient.default_unit_id is None:
@@ -565,6 +577,14 @@ class RecipeService(BaseService):
                     name=cleaned_ar,
                 )
             )
+        if cleaned_ru:
+            session.add(
+                IngredientTranslation(
+                    ingredient_id=ingredient.id,
+                    language_id=russian_language_id,
+                    name=cleaned_ru,
+                )
+            )
         return ingredient
 
     @staticmethod
@@ -590,6 +610,10 @@ class RecipeService(BaseService):
     def _validate_create_input(self, input_data: CreateRecipeInput) -> None:
         if not input_data.title_en.strip():
             raise RecipeValidationError(translate("en", "service.validation.title_required"))
+        if not self._clean_optional_text(input_data.title_ar):
+            raise RecipeValidationError(translate("en", "service.validation.title_ar_required"))
+        if not self._clean_optional_text(input_data.title_ru):
+            raise RecipeValidationError(translate("en", "service.validation.title_ru_required"))
         if not input_data.category_id or input_data.category_id <= 0:
             raise RecipeValidationError(translate("en", "service.validation.category_required"))
         if input_data.prep_time_minutes < 0 or input_data.cook_time_minutes < 0:
@@ -610,5 +634,9 @@ class RecipeService(BaseService):
         for step in input_data.steps:
             if not step.instruction_en.strip():
                 raise RecipeValidationError(translate("en", "service.validation.step_instruction_required"))
+            if not self._clean_optional_text(step.instruction_ar):
+                raise RecipeValidationError(translate("en", "service.validation.step_instruction_ar_required"))
+            if not self._clean_optional_text(step.instruction_ru):
+                raise RecipeValidationError(translate("en", "service.validation.step_instruction_ru_required"))
             if step.estimated_minutes is not None and step.estimated_minutes < 0:
                 raise RecipeValidationError(translate("en", "service.validation.step_minutes_non_negative"))

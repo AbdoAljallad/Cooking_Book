@@ -385,8 +385,10 @@ def test_recipe_service_can_create_recipe_with_related_records(tmp_path: Path) -
     recipe_id = service.create_recipe(
         CreateRecipeInput(
             title_en="Weeknight Soup",
+            title_ru="Quick Soup RU",
             title_ar="شوربة سريعة",
             short_description_en="Quick soup for testing.",
+            short_description_ru="Quick soup Russian summary.",
             short_description_ar="شوربة سريعة للاختبار.",
             category_id=category.id,
             image_path=None,
@@ -399,6 +401,7 @@ def test_recipe_service_can_create_recipe_with_related_records(tmp_path: Path) -
             ingredients=[
                 CreateRecipeIngredientInput(
                     name_en="Carrot",
+                    name_ru="Carrot RU",
                     name_ar="جزر",
                     quantity=Decimal("150.000"),
                     unit_id=unit.id,
@@ -410,6 +413,7 @@ def test_recipe_service_can_create_recipe_with_related_records(tmp_path: Path) -
             steps=[
                 CreateRecipeStepInput(
                     instruction_en="Cook everything until tender.",
+                    instruction_ru="Cook everything RU.",
                     instruction_ar="اطبخ كل شيء حتى ينضج.",
                     estimated_minutes=15,
                 )
@@ -425,6 +429,13 @@ def test_recipe_service_can_create_recipe_with_related_records(tmp_path: Path) -
     assert details.tags == ["سريع"]
     assert details.ingredients[0].item_name == "جزر"
     assert details.steps[0].instruction == "اطبخ كل شيء حتى ينضج."
+
+
+    ru_details = service.get_recipe_details(recipe_id, "ru")
+    assert ru_details is not None
+    assert ru_details.title == "Quick Soup RU"
+    assert ru_details.ingredients[0].item_name == "Carrot RU"
+    assert ru_details.steps[0].instruction == "Cook everything RU."
 
 
 def test_recipe_service_handles_favorites_notes_and_ratings(tmp_path: Path) -> None:

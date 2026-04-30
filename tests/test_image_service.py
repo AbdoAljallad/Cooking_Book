@@ -76,9 +76,11 @@ def test_recipe_service_persists_managed_image_path_after_creation(tmp_path: Pat
     recipe_id = recipe_service.create_recipe(
         CreateRecipeInput(
             title_en="Image Test Soup",
-            title_ar=None,
+            title_ar="Image Test Soup AR",
+            title_ru="Image Test Soup RU",
             short_description_en="Recipe with managed image.",
-            short_description_ar=None,
+            short_description_ar="Recipe with managed image AR.",
+            short_description_ru="Recipe with managed image RU.",
             category_id=category.id,
             image_path=None,
             prep_time_minutes=10,
@@ -91,6 +93,7 @@ def test_recipe_service_persists_managed_image_path_after_creation(tmp_path: Pat
                 CreateRecipeIngredientInput(
                     name_en="Water",
                     name_ar=None,
+                    name_ru=None,
                     quantity=Decimal("500.000"),
                     unit_id=unit.id,
                     is_scalable=True,
@@ -101,7 +104,8 @@ def test_recipe_service_persists_managed_image_path_after_creation(tmp_path: Pat
             steps=[
                 CreateRecipeStepInput(
                     instruction_en="Heat and serve.",
-                    instruction_ar=None,
+                    instruction_ar="Heat and serve AR.",
+                    instruction_ru="Heat and serve RU.",
                     estimated_minutes=5,
                 )
             ],
@@ -112,8 +116,12 @@ def test_recipe_service_persists_managed_image_path_after_creation(tmp_path: Pat
 
     with session_factory() as session:
         recipe = session.execute(select(Recipe).where(Recipe.id == recipe_id)).scalar_one()
-        translation = session.execute(select(RecipeTranslation).where(RecipeTranslation.recipe_id == recipe_id)).scalar_one()
+        translations = session.execute(select(RecipeTranslation).where(RecipeTranslation.recipe_id == recipe_id)).scalars().all()
 
-    assert translation.title == "Image Test Soup"
+    assert {translation.title for translation in translations} == {
+        "Image Test Soup",
+        "Image Test Soup AR",
+        "Image Test Soup RU",
+    }
     assert recipe.image_path == f"assets/images/recipes/{recipe_id}.png"
     assert (tmp_path / recipe.image_path).exists()

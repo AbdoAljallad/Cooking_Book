@@ -1,6 +1,6 @@
 # Premium Cookbook Desktop App
 
-Initial project scaffold for a multilingual desktop cookbook application built with Python, PySide6, MySQL, SQLAlchemy, and Alembic.
+Premium multilingual desktop cookbook application built with Python, PySide6, MySQL, SQLAlchemy, and Alembic.
 
 ## Features of this starter
 
@@ -9,7 +9,7 @@ Initial project scaffold for a multilingual desktop cookbook application built w
 - Reusable UI component placeholders
 - Structured and validated MySQL configuration layer
 - Database, repositories, services, models, and tests separated cleanly
-- Minimal starter window to verify the desktop app boots
+- Modern data-bound desktop screens for browsing, creating, and viewing recipes
 - SQLAlchemy engine, session, and health-check helpers
 - Alembic bootstrap files for future migrations
 
@@ -150,9 +150,9 @@ It inserts:
 - Languages: `en`, `ar`, `ru`
 - One default local profile: `local@cookbook.app`
 - One default app setting row linked to that profile
-- Main recipe categories with English and Arabic translations
-- Common measurement units with English and Arabic translations
-- Starter tags with English and Arabic translations
+- Main recipe categories with English, Arabic, and Russian translations
+- Common measurement units with English, Arabic, and Russian translations
+- Starter tags with English, Arabic, and Russian translations
 
 To verify seeded data:
 
@@ -209,11 +209,19 @@ The settings flow now explicitly supports:
 
 The selected language is stored in the database-backed profile settings and restored on the next launch. In this step, the shared shell labels, settings workflow, search controls, and the new recipe-image workflow are localized. The rest of the UI is prepared for the next broader localization pass through the centralized helpers in `app/utils/i18n.py`.
 
+The main application shell now uses a persistent side navigation panel for Catalog, Add Recipe, Favorites, Categories, and Settings. The Categories page is intentionally a polished placeholder until category management is implemented.
+
+The database status badge is monitored automatically while the app is running. A lightweight background check updates the badge when MySQL becomes available or unavailable, and the current page reloads automatically after reconnection.
+
 ## Create recipe flow
 
 The app now includes a dedicated Add Recipe screen reached from the top-bar `Add Recipe` button.
 
-- The UI collects English and optional Arabic recipe content.
+- The UI collects English, Arabic, and Russian recipe content.
+- Recipe creation now stores English, Arabic, and Russian recipe translations through the existing translation tables.
+- English, Arabic, and Russian titles are required for new recipes.
+- Recipe steps support English, Arabic, and Russian instructions.
+- Ingredient matching and creation support Russian ingredient names in addition to English and Arabic.
 - Categories, tags, and units are loaded through services and repositories.
 - Ingredients are entered inline. Existing ingredients are reused automatically when the entered English or Arabic name matches an existing translation.
 - If an ingredient does not exist yet, the create flow inserts a new `Ingredient` plus the provided translations.
@@ -223,11 +231,14 @@ The app now includes a dedicated Add Recipe screen reached from the top-bar `Add
 Validation rules currently include:
 
 - English recipe title is required
+- Arabic recipe title is required
+- Russian recipe title is required
 - category is required
 - prep and cook times must be zero or greater
 - base servings must be greater than zero
 - at least one ingredient is required
 - at least one step is required
+- each step requires English, Arabic, and Russian instructions
 - each ingredient needs an English name
 - ingredient quantities must be zero or greater
 - each step needs an English instruction

@@ -10,8 +10,9 @@ from app.utils.i18n import translate
 
 class RecipeCard(BaseCard):
     clicked = Signal(int)
-    IMAGE_WIDTH = 320
+    IMAGE_WIDTH = 336
     IMAGE_HEIGHT = 174
+    CARD_PADDING = 14
 
     def __init__(
         self,
@@ -22,6 +23,12 @@ class RecipeCard(BaseCard):
     ) -> None:
         super().__init__(parent)
         self.setObjectName("recipeCard")
+        self.content_layout.setContentsMargins(
+            self.CARD_PADDING,
+            self.CARD_PADDING,
+            self.CARD_PADDING,
+            self.CARD_PADDING,
+        )
         self.recipe = recipe
         self.setMinimumWidth(self.IMAGE_WIDTH)
         self.setMaximumWidth(390)
@@ -34,7 +41,8 @@ class RecipeCard(BaseCard):
         image_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         image_path = image_service.resolve_display_path(recipe.image_path)
-        image_label.setPixmap(self._cover_pixmap(QPixmap(str(image_path)), self.IMAGE_WIDTH, self.IMAGE_HEIGHT))
+        self._source_pixmap = QPixmap(str(image_path))
+        image_label.setPixmap(self._cover_pixmap(self._source_pixmap, self.IMAGE_WIDTH, self.IMAGE_HEIGHT))
         self.image_label = image_label
         self.content_layout.addWidget(image_label)
 
@@ -80,7 +88,9 @@ class RecipeCard(BaseCard):
     def set_card_width(self, width: int) -> None:
         safe_width = max(260, min(width, 390))
         self.setFixedWidth(safe_width)
-        self.image_label.setMinimumWidth(safe_width - 48)
+        image_width = max(220, safe_width - (self.CARD_PADDING * 2))
+        self.image_label.setFixedWidth(image_width)
+        self.image_label.setPixmap(self._cover_pixmap(self._source_pixmap, image_width, self.IMAGE_HEIGHT))
 
     @staticmethod
     def _cover_pixmap(pixmap: QPixmap, width: int, height: int) -> QPixmap:

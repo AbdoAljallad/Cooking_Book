@@ -176,7 +176,7 @@ def build_stylesheet(theme: ThemeDefinition) -> str:
         border: 1px dashed {colors.border};
         border-radius: {radii.md}px;
         color: {colors.text_secondary};
-        padding: {spacing.xl}px;
+        padding: 0px;
     }}
 
     QWidget#searchBar {{

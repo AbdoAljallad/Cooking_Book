@@ -197,6 +197,8 @@ The Recipe Details screen also supports display-time servings scaling. Adjusting
 
 The Home screen now supports real recipe search and category filtering through the service and repository layers. Search matches recipe title and short description for the active UI language, category chips toggle the active category filter, and clearing filters restores the full list.
 
+The catalog grid wraps recipe cards based on available window width and avoids horizontal scrolling. Recipe cards use consistent image frames, equal placeholder sizing, and compact tag display.
+
 Recipe Details now also supports personal interactions for the default local profile: favorite toggling, a 1-to-5 rating, and a lightweight personal note. A dedicated Favorites view is available from the main shell and reuses the existing recipe cards.
 
 The app also includes a dedicated Settings screen for the default local profile. Theme and language preferences persist to `app_settings`, theme changes apply immediately to the running application, and language selection already updates data language and layout direction while preparing the codebase for fuller UI localization later.
@@ -212,6 +214,10 @@ The selected language is stored in the database-backed profile settings and rest
 The main application shell now uses a persistent side navigation panel for Catalog, Add Recipe, Favorites, Categories, and Settings. The Categories page is intentionally a polished placeholder until category management is implemented.
 
 The database status badge is monitored automatically while the app is running. A lightweight background check updates the badge when MySQL becomes available or unavailable, and the current page reloads automatically after reconnection.
+
+On successful database connection, the app performs a safe startup maintenance check. Missing tables are created with SQLAlchemy metadata, and missing reference rows are inserted through the idempotent seed layer. The check does not truncate tables, delete recipes, or reset user-created content.
+
+Translated database content uses English as the default fallback. If Arabic or Russian text is missing for recipes, categories, tags, units, ingredients, or steps, the service/repository layer resolves the English value before the UI renders it.
 
 ## Create recipe flow
 

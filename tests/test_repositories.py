@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from app.database.base import Base
-from app.models import Category, Favorite, Profile, Recipe, RecipeNote, RecipeRating, RecipeTranslation
+from app.models import Category, Favorite, Language, Profile, Recipe, RecipeNote, RecipeRating, RecipeTranslation, Tag, TagTranslation
 from app.models.enums import DifficultyLevel, RecipeSourceType
 from app.repositories import (
     AppSettingRepository,
@@ -113,6 +113,27 @@ def test_single_record_repository_methods(tmp_path: Path) -> None:
         assert CategoryRepository(session).get_by_slug("desserts", language_code="ru") is not None
         assert UnitRepository(session).get_by_code("gram", language_code="ru") is not None
         assert TagRepository(session).get_by_slug("quick", language_code="ru") is not None
+
+
+def test_reference_repositories_fallback_to_english_when_translation_missing(tmp_path: Path) -> None:
+    session_factory = _build_session_factory(tmp_path)
+    run_seed(session_factory)
+
+    with session_factory() as session:
+        russian = session.execute(select(Language).where(Language.code == "ru")).scalar_one()
+        quick = session.execute(select(Tag).where(Tag.slug == "quick")).scalar_one()
+        session.execute(
+            TagTranslation.__table__.delete().where(
+                TagTranslation.tag_id == quick.id,
+                TagTranslation.language_id == russian.id,
+            )
+        )
+        session.commit()
+
+    with session_factory() as session:
+        tags = TagRepository(session).list_all(language_code="ru")
+
+    assert any(tag.slug == "quick" and tag.display_name == "Quick" for tag in tags)
 
 
 def test_app_setting_repository_updates_profile_settings(tmp_path: Path) -> None:

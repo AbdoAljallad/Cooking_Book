@@ -17,6 +17,7 @@ class NavItem:
 
 class SideNav(QWidget):
     page_requested = Signal(str)
+    collapsed_changed = Signal(bool)
 
     def __init__(self, items: list[NavItem], parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -24,6 +25,7 @@ class SideNav(QWidget):
         self.items = items
         self.buttons: dict[str, QPushButton] = {}
         self._language_code = "en"
+        self._collapsed = False
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -34,6 +36,12 @@ class SideNav(QWidget):
         self.section_label = QLabel()
         self.section_label.setObjectName("navSectionLabel")
         layout.addWidget(self.section_label)
+
+        self.toggle_button = QPushButton()
+        self.toggle_button.setObjectName("navButton")
+        self.toggle_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.toggle_button.clicked.connect(self.toggle_collapsed)
+        layout.addWidget(self.toggle_button)
 
         for item in self.items:
             button = QPushButton()
@@ -48,11 +56,27 @@ class SideNav(QWidget):
     def set_language(self, language_code: str) -> None:
         self._language_code = language_code
         self.section_label.setText(translate(language_code, "nav.section"))
+        self.toggle_button.setText("<  " + translate(language_code, "nav.collapse"))
         for item in self.items:
-            self.buttons[item.key].setText(f"{item.icon}  {translate(language_code, item.label_key)}")
+            self.buttons[item.key].setText(self._button_text(item))
 
     def set_active(self, key: str) -> None:
         for page_key, button in self.buttons.items():
             button.setProperty("active", page_key == key)
             button.style().unpolish(button)
             button.style().polish(button)
+
+    def toggle_collapsed(self) -> None:
+        self.set_collapsed(not self._collapsed)
+
+    def set_collapsed(self, collapsed: bool) -> None:
+        self._collapsed = collapsed
+        self.section_label.setVisible(not collapsed)
+        self.setFixedWidth(72 if collapsed else 230)
+        self.toggle_button.setText(">" if collapsed else "<  " + translate(self._language_code, "nav.collapse"))
+        for item in self.items:
+            self.buttons[item.key].setText(item.icon if collapsed else self._button_text(item))
+        self.collapsed_changed.emit(collapsed)
+
+    def _button_text(self, item: NavItem) -> str:
+        return f"{item.icon}  {translate(self._language_code, item.label_key)}"

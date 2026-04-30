@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Select, and_, delete, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import joinedload
 
 from app.models import (
@@ -43,7 +43,7 @@ class RecipeRepository(BaseRepository[Recipe]):
         if limit is not None:
             statement = statement.limit(limit)
         rows = self.session.execute(statement).all()
-        return [self._to_list_item(row) for row in rows]
+        return self._with_tags([self._to_list_item(row) for row in rows], language_code)
 
     def get_by_id(self, recipe_id: int) -> Recipe | None:
         statement = (
@@ -172,7 +172,7 @@ class RecipeRepository(BaseRepository[Recipe]):
         if limit is not None:
             statement = statement.limit(limit)
         rows = self.session.execute(statement).all()
-        return [self._to_list_item(row) for row in rows]
+        return self._with_tags([self._to_list_item(row) for row in rows], language_code)
 
     def list_by_category(
         self,
@@ -208,11 +208,23 @@ class RecipeRepository(BaseRepository[Recipe]):
         normalized = (query_text or "").strip()
         if normalized:
             pattern = f"%{normalized}%"
-            statement = statement.where(
-                or_(
-                    RecipeTranslation.title.ilike(pattern),
-                    RecipeTranslation.short_description.ilike(pattern),
+            target_language = language_code or "en"
+            search_translation = (
+                select(RecipeTranslation.id)
+                .join(Language, Language.id == RecipeTranslation.language_id)
+                .where(
+                    RecipeTranslation.recipe_id == Recipe.id,
+                    Language.code.in_([target_language, "en"]),
+                    or_(
+                        RecipeTranslation.title.ilike(pattern),
+                        RecipeTranslation.short_description.ilike(pattern),
+                    ),
                 )
+                .correlate(Recipe)
+                .exists()
+            )
+            statement = statement.where(
+                search_translation
             )
         if category_slug:
             statement = statement.where(Category.slug == category_slug)
@@ -220,37 +232,61 @@ class RecipeRepository(BaseRepository[Recipe]):
         if limit is not None:
             statement = statement.limit(limit)
         rows = self.session.execute(statement).all()
-        return [self._to_list_item(row) for row in rows]
+        return self._with_tags([self._to_list_item(row) for row in rows], language_code)
 
     def _basic_list_statement(self, language_code: str | None) -> Select:
-        language_match = Language.code == language_code if language_code else Language.code == "en"
+        target_language = language_code or "en"
+        requested_title = (
+            select(RecipeTranslation.title)
+            .join(Language, Language.id == RecipeTranslation.language_id)
+            .where(RecipeTranslation.recipe_id == Recipe.id, Language.code == target_language)
+            .correlate(Recipe)
+            .scalar_subquery()
+        )
+        requested_description = (
+            select(RecipeTranslation.short_description)
+            .join(Language, Language.id == RecipeTranslation.language_id)
+            .where(RecipeTranslation.recipe_id == Recipe.id, Language.code == target_language)
+            .correlate(Recipe)
+            .scalar_subquery()
+        )
+        english_title = (
+            select(RecipeTranslation.title)
+            .join(Language, Language.id == RecipeTranslation.language_id)
+            .where(RecipeTranslation.recipe_id == Recipe.id, Language.code == "en")
+            .correlate(Recipe)
+            .scalar_subquery()
+        )
+        english_description = (
+            select(RecipeTranslation.short_description)
+            .join(Language, Language.id == RecipeTranslation.language_id)
+            .where(RecipeTranslation.recipe_id == Recipe.id, Language.code == "en")
+            .correlate(Recipe)
+            .scalar_subquery()
+        )
+        requested_category = (
+            select(CategoryTranslation.name)
+            .join(Language, Language.id == CategoryTranslation.language_id)
+            .where(CategoryTranslation.category_id == Category.id, Language.code == target_language)
+            .correlate(Category)
+            .scalar_subquery()
+        )
+        english_category = (
+            select(CategoryTranslation.name)
+            .join(Language, Language.id == CategoryTranslation.language_id)
+            .where(CategoryTranslation.category_id == Category.id, Language.code == "en")
+            .correlate(Category)
+            .scalar_subquery()
+        )
         statement = (
             select(
                 Recipe,
-                RecipeTranslation.title,
-                RecipeTranslation.short_description,
+                func.coalesce(func.nullif(requested_title, ""), english_title, "Untitled"),
+                func.coalesce(func.nullif(requested_description, ""), english_description),
                 Category.slug,
-                CategoryTranslation.name,
+                func.coalesce(func.nullif(requested_category, ""), english_category, Category.slug),
             )
             .join(Category, Category.id == Recipe.category_id)
-            .join(
-                RecipeTranslation,
-                RecipeTranslation.recipe_id == Recipe.id,
-            )
-            .join(
-                Language,
-                and_(
-                    Language.id == RecipeTranslation.language_id,
-                    language_match,
-                ),
-            )
-            .outerjoin(
-                CategoryTranslation,
-                and_(
-                    CategoryTranslation.category_id == Category.id,
-                    CategoryTranslation.language_id == Language.id,
-                ),
-            )
             .where(Recipe.is_active.is_(True))
             .order_by(Recipe.updated_at.desc(), Recipe.id.desc())
         )
@@ -272,6 +308,59 @@ class RecipeRepository(BaseRepository[Recipe]):
             difficulty_level=recipe.difficulty_level.value,
             source_type=recipe.source_type.value,
             image_path=recipe.image_path,
+            tags=[],
             created_at=recipe.created_at,
             updated_at=recipe.updated_at,
         )
+
+    def _with_tags(self, recipes: list[RecipeListItem], language_code: str | None) -> list[RecipeListItem]:
+        if not recipes:
+            return recipes
+        recipe_ids = [recipe.id for recipe in recipes]
+        target_language = language_code or "en"
+        requested_tag = (
+            select(TagTranslation.name)
+            .join(Language, Language.id == TagTranslation.language_id)
+            .where(TagTranslation.tag_id == Tag.id, Language.code == target_language)
+            .correlate(Tag)
+            .scalar_subquery()
+        )
+        english_tag = (
+            select(TagTranslation.name)
+            .join(Language, Language.id == TagTranslation.language_id)
+            .where(TagTranslation.tag_id == Tag.id, Language.code == "en")
+            .correlate(Tag)
+            .scalar_subquery()
+        )
+        rows = self.session.execute(
+            select(
+                RecipeTag.recipe_id,
+                func.coalesce(func.nullif(requested_tag, ""), english_tag, Tag.slug),
+            )
+            .join(Tag, Tag.id == RecipeTag.tag_id)
+            .where(RecipeTag.recipe_id.in_(recipe_ids))
+            .order_by(Tag.slug.asc())
+        ).all()
+        tags_by_recipe: dict[int, list[str]] = {recipe_id: [] for recipe_id in recipe_ids}
+        for recipe_id, tag_name in rows:
+            tags_by_recipe.setdefault(recipe_id, []).append(tag_name)
+        return [
+            RecipeListItem(
+                id=recipe.id,
+                title=recipe.title,
+                short_description=recipe.short_description,
+                category_slug=recipe.category_slug,
+                category_name=recipe.category_name,
+                prep_time_minutes=recipe.prep_time_minutes,
+                cook_time_minutes=recipe.cook_time_minutes,
+                total_time_minutes=recipe.total_time_minutes,
+                base_servings=recipe.base_servings,
+                difficulty_level=recipe.difficulty_level,
+                source_type=recipe.source_type,
+                image_path=recipe.image_path,
+                tags=tags_by_recipe.get(recipe.id, []),
+                created_at=recipe.created_at,
+                updated_at=recipe.updated_at,
+            )
+            for recipe in recipes
+        ]

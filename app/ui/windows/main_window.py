@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from threading import Thread
+
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -21,6 +23,7 @@ from app.services import (
     AppContextService,
     CategoryService,
     DatabaseStatusService,
+    DatabaseMaintenanceService,
     HomeService,
     ImageService,
     RecipeService,
@@ -45,6 +48,8 @@ class MainWindow(QMainWindow):
         self.settings = settings
         self.theme_manager = theme_manager
         self.database_status_service = DatabaseStatusService(settings.database)
+        self.database_maintenance_service = DatabaseMaintenanceService(settings.database)
+        self._maintenance_running = False
         self.context_service = AppContextService(settings=settings)
         self.current_context = self.context_service.get_context()
         self.image_service = ImageService()
@@ -61,14 +66,24 @@ class MainWindow(QMainWindow):
         )
 
         self.setWindowTitle("Premium Cookbook")
-        self.resize(1320, 860)
-        self.setMinimumSize(1100, 700)
+        self._set_initial_window_size()
+        self.setMinimumSize(920, 620)
 
         self._apply_context(self.current_context)
         self._build_ui()
         self._start_database_monitor()
         self._return_page = None
         self._active_page_key = "home"
+
+    def _set_initial_window_size(self) -> None:
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            self.resize(1280, 820)
+            return
+        available = screen.availableGeometry()
+        width = min(1320, max(980, int(available.width() * 0.82)))
+        height = min(860, max(680, int(available.height() * 0.82)))
+        self.resize(width, height)
 
     def _apply_layout_direction(self, direction: str) -> None:
         qt_direction = Qt.RightToLeft if direction == "rtl" else Qt.LeftToRight
@@ -210,7 +225,24 @@ class MainWindow(QMainWindow):
 
     def _handle_database_status_changed(self, result: DatabaseHealthResult) -> None:
         if result.ok:
-            self._refresh_active_page()
+            self._run_database_maintenance()
+
+    def _run_database_maintenance(self) -> None:
+        if self._maintenance_running:
+            return
+        self._maintenance_running = True
+
+        def worker() -> None:
+            try:
+                self.database_maintenance_service.ensure_ready()
+            except Exception:
+                pass
+            finally:
+                self._maintenance_running = False
+                self.database_status_service.check_now()
+                QTimer.singleShot(0, self._refresh_active_page)
+
+        Thread(target=worker, daemon=True).start()
 
     def _on_theme_changed(self, theme_name: str) -> None:
         application = QApplication.instance()

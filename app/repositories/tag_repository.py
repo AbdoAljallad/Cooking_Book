@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Select, and_, select
+from sqlalchemy import Select, func, literal, select
 
 from app.models import Language, Tag, TagTranslation
 from app.repositories.base import BaseRepository
@@ -24,17 +24,26 @@ class TagRepository(BaseRepository[Tag]):
 
     def _localized_statement(self, language_code: str | None) -> Select:
         target_language = language_code or "en"
-        statement = select(Tag, TagTranslation.name, Language.code)
-        return (
-            statement.join(TagTranslation, TagTranslation.tag_id == Tag.id)
-            .join(
-                Language,
-                and_(
-                    Language.id == TagTranslation.language_id,
-                    Language.code == target_language,
-                ),
-            )
+        requested_name = (
+            select(TagTranslation.name)
+            .join(Language, Language.id == TagTranslation.language_id)
+            .where(TagTranslation.tag_id == Tag.id, Language.code == target_language)
+            .correlate(Tag)
+            .scalar_subquery()
         )
+        english_name = (
+            select(TagTranslation.name)
+            .join(Language, Language.id == TagTranslation.language_id)
+            .where(TagTranslation.tag_id == Tag.id, Language.code == "en")
+            .correlate(Tag)
+            .scalar_subquery()
+        )
+        statement = select(
+            Tag,
+            func.coalesce(func.nullif(requested_name, ""), english_name, Tag.slug),
+            literal(target_language),
+        )
+        return statement
 
     @staticmethod
     def _to_projection(row) -> LocalizedTag:

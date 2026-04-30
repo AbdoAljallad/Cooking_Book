@@ -470,11 +470,18 @@ class RecipeService(BaseService):
 
     @staticmethod
     def _pick_translation(translations: Iterable, language_code: str):
+        english_translation = None
         for translation in translations:
             language = getattr(translation, "language", None)
+            if language is not None and language.code == "en":
+                english_translation = translation
             if language is not None and language.code == language_code:
-                return translation
-        return next(iter(translations), None)
+                title = getattr(translation, "title", None)
+                name = getattr(translation, "name", None)
+                instruction = getattr(translation, "instruction", None)
+                if (title or name or instruction) not in {None, ""}:
+                    return translation
+        return english_translation or next(iter(translations), None)
 
     def _format_scaled_ingredient_quantity(
         self,

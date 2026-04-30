@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Select, and_, select
+from sqlalchemy import Select, func, literal, select
 
 from app.models import Category, CategoryTranslation, Language
 from app.repositories.base import BaseRepository
@@ -27,24 +27,32 @@ class CategoryRepository(BaseRepository[Category]):
 
     def _localized_statement(self, language_code: str | None) -> Select:
         target_language = language_code or "en"
+        requested_name = (
+            select(CategoryTranslation.name)
+            .join(Language, Language.id == CategoryTranslation.language_id)
+            .where(
+                CategoryTranslation.category_id == Category.id,
+                Language.code == target_language,
+            )
+            .correlate(Category)
+            .scalar_subquery()
+        )
+        english_name = (
+            select(CategoryTranslation.name)
+            .join(Language, Language.id == CategoryTranslation.language_id)
+            .where(
+                CategoryTranslation.category_id == Category.id,
+                Language.code == "en",
+            )
+            .correlate(Category)
+            .scalar_subquery()
+        )
         statement = select(
             Category,
-            CategoryTranslation.name,
-            Language.code,
+            func.coalesce(func.nullif(requested_name, ""), english_name, Category.slug),
+            literal(target_language),
         )
-        return (
-            statement.join(
-                CategoryTranslation,
-                CategoryTranslation.category_id == Category.id,
-            )
-            .join(
-                Language,
-                and_(
-                    Language.id == CategoryTranslation.language_id,
-                    Language.code == target_language,
-                ),
-            )
-        )
+        return statement
 
     @staticmethod
     def _to_projection(row) -> LocalizedCategory:

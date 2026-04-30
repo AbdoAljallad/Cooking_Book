@@ -23,6 +23,8 @@ class RecipeCard(BaseCard):
         super().__init__(parent)
         self.setObjectName("recipeCard")
         self.recipe = recipe
+        self.setMinimumWidth(self.IMAGE_WIDTH)
+        self.setMaximumWidth(390)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         image_label = QLabel()
@@ -33,6 +35,7 @@ class RecipeCard(BaseCard):
         image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         image_path = image_service.resolve_display_path(recipe.image_path)
         image_label.setPixmap(self._cover_pixmap(QPixmap(str(image_path)), self.IMAGE_WIDTH, self.IMAGE_HEIGHT))
+        self.image_label = image_label
         self.content_layout.addWidget(image_label)
 
         category_label = QLabel(recipe.category_name or recipe.category_slug.replace("_", " ").title())
@@ -49,6 +52,12 @@ class RecipeCard(BaseCard):
         description_label.setObjectName("recipeCardDescription")
         description_label.setWordWrap(True)
         self.content_layout.addWidget(description_label)
+
+        if recipe.tags:
+            tags_label = QLabel("  ".join(recipe.tags[:3]))
+            tags_label.setObjectName("tagPill")
+            tags_label.setWordWrap(True)
+            self.content_layout.addWidget(tags_label)
 
         meta_label = QLabel(
             translate(
@@ -67,6 +76,11 @@ class RecipeCard(BaseCard):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit(self.recipe.id)
         super().mousePressEvent(event)
+
+    def set_card_width(self, width: int) -> None:
+        safe_width = max(260, min(width, 390))
+        self.setFixedWidth(safe_width)
+        self.image_label.setMinimumWidth(safe_width - 48)
 
     @staticmethod
     def _cover_pixmap(pixmap: QPixmap, width: int, height: int) -> QPixmap:

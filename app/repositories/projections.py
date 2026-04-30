@@ -50,5 +50,6 @@ class RecipeListItem:
     difficulty_level: str
     source_type: str
     image_path: str | None
+    tags: list[str]
     created_at: datetime
     updated_at: datetime

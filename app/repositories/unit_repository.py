@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Select, and_, select
+from sqlalchemy import Select, func, literal, select
 
 from app.models import Language, Unit, UnitTranslation
 from app.repositories.base import BaseRepository
@@ -24,17 +24,41 @@ class UnitRepository(BaseRepository[Unit]):
 
     def _localized_statement(self, language_code: str | None) -> Select:
         target_language = language_code or "en"
-        statement = select(Unit, UnitTranslation.name, UnitTranslation.abbreviation, Language.code)
-        return (
-            statement.join(UnitTranslation, UnitTranslation.unit_id == Unit.id)
-            .join(
-                Language,
-                and_(
-                    Language.id == UnitTranslation.language_id,
-                    Language.code == target_language,
-                ),
-            )
+        requested_name = (
+            select(UnitTranslation.name)
+            .join(Language, Language.id == UnitTranslation.language_id)
+            .where(UnitTranslation.unit_id == Unit.id, Language.code == target_language)
+            .correlate(Unit)
+            .scalar_subquery()
         )
+        requested_abbreviation = (
+            select(UnitTranslation.abbreviation)
+            .join(Language, Language.id == UnitTranslation.language_id)
+            .where(UnitTranslation.unit_id == Unit.id, Language.code == target_language)
+            .correlate(Unit)
+            .scalar_subquery()
+        )
+        english_name = (
+            select(UnitTranslation.name)
+            .join(Language, Language.id == UnitTranslation.language_id)
+            .where(UnitTranslation.unit_id == Unit.id, Language.code == "en")
+            .correlate(Unit)
+            .scalar_subquery()
+        )
+        english_abbreviation = (
+            select(UnitTranslation.abbreviation)
+            .join(Language, Language.id == UnitTranslation.language_id)
+            .where(UnitTranslation.unit_id == Unit.id, Language.code == "en")
+            .correlate(Unit)
+            .scalar_subquery()
+        )
+        statement = select(
+            Unit,
+            func.coalesce(func.nullif(requested_name, ""), english_name, Unit.code),
+            func.coalesce(func.nullif(requested_abbreviation, ""), english_abbreviation, Unit.symbol),
+            literal(target_language),
+        )
+        return statement
 
     @staticmethod
     def _to_projection(row) -> LocalizedUnit:

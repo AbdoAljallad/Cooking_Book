@@ -18,6 +18,7 @@ from app.models import (
     UnitTranslation,
 )
 from app.seeds.runner import run_seed
+from app.services.database_maintenance_service import DatabaseMaintenanceService
 
 
 def test_reference_seed_is_idempotent(tmp_path: Path) -> None:
@@ -76,3 +77,18 @@ def test_seed_links_default_profile_and_language(tmp_path: Path) -> None:
         assert app_setting.ui_language_id == english.id
         assert app_setting.theme_name == "dark"
         assert app_setting.layout_direction == "ltr"
+
+
+def test_database_maintenance_creates_missing_tables_and_reference_rows(tmp_path: Path) -> None:
+    database_file = tmp_path / "maintenance_test.db"
+    engine = create_engine(f"sqlite:///{database_file}", future=True)
+    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+    summary = DatabaseMaintenanceService(session_factory=session_factory).ensure_ready()
+    second = DatabaseMaintenanceService(session_factory=session_factory).ensure_ready()
+
+    assert summary.created_missing_tables is True
+    assert second.created_missing_tables is False
+    with session_factory() as session:
+        assert session.execute(select(Language).where(Language.code == "ru")).scalar_one_or_none() is not None
+        assert session.query(Recipe).count() == 0

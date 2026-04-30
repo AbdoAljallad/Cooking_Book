@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 from app.repositories import RecipeListItem
@@ -25,6 +25,8 @@ class HomePage(QWidget):
         self._dashboard_data: HomeDashboardData | None = None
         self._search_text = ""
         self._selected_category_slug: str | None = None
+        self._latest_recipes: list[RecipeListItem] = []
+        self._featured_recipes: list[RecipeListItem] = []
 
         self._build_ui()
         self.reload()
@@ -36,6 +38,7 @@ class HomePage(QWidget):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setObjectName("pageScrollArea")
         outer_layout.addWidget(scroll)
@@ -71,9 +74,10 @@ class HomePage(QWidget):
         self.search_bar.clear_requested.connect(self._clear_filters)
         self.hero_card.content_layout.addWidget(self.search_bar)
 
-        self.tag_row = QHBoxLayout()
-        self.tag_row.setSpacing(8)
-        self.hero_card.content_layout.addLayout(self.tag_row)
+        self.tag_grid = QGridLayout()
+        self.tag_grid.setHorizontalSpacing(8)
+        self.tag_grid.setVerticalSpacing(8)
+        self.hero_card.content_layout.addLayout(self.tag_grid)
 
         self.active_filters_card = BaseCard()
         self.active_filters_header = SectionHeader("", "")
@@ -94,9 +98,10 @@ class HomePage(QWidget):
         self.category_section = BaseCard()
         self.category_header = SectionHeader("", "")
         self.category_section.content_layout.addWidget(self.category_header)
-        self.category_row = QHBoxLayout()
-        self.category_row.setSpacing(10)
-        self.category_section.content_layout.addLayout(self.category_row)
+        self.category_grid = QGridLayout()
+        self.category_grid.setHorizontalSpacing(10)
+        self.category_grid.setVerticalSpacing(10)
+        self.category_section.content_layout.addLayout(self.category_grid)
         self.page_layout.addWidget(self.category_section)
 
         self.featured_section = BaseCard()
@@ -170,29 +175,32 @@ class HomePage(QWidget):
         )
 
     def _populate_tags(self, dashboard: HomeDashboardData) -> None:
-        self._clear_box(self.tag_row)
-        for tag in dashboard.tags[:5]:
+        self._clear_grid(self.tag_grid)
+        columns = self._chip_columns()
+        for index, tag in enumerate(dashboard.tags[:8]):
             tag_label = QLabel(tag.display_name)
             tag_label.setObjectName("tagPill")
-            self.tag_row.addWidget(tag_label)
-        self.tag_row.addStretch(1)
+            self.tag_grid.addWidget(tag_label, index // columns, index % columns)
 
     def _populate_categories(self, dashboard: HomeDashboardData) -> None:
-        self._clear_box(self.category_row)
+        self._clear_grid(self.category_grid)
         language_code = dashboard.context.language_code
+        chips: list[CategoryChip] = []
 
         all_chip = CategoryChip("all", translate(language_code, "home.category.all"))
         all_chip.setChecked(self._selected_category_slug in {None, "all"})
         all_chip.selected_changed.connect(self._handle_category_selected)
-        self.category_row.addWidget(all_chip)
+        chips.append(all_chip)
 
         for category in dashboard.categories:
             chip = CategoryChip(category.slug, category.display_name)
             chip.setChecked(category.slug == self._selected_category_slug)
             chip.selected_changed.connect(self._handle_category_selected)
-            self.category_row.addWidget(chip)
+            chips.append(chip)
 
-        self.category_row.addStretch(1)
+        columns = self._chip_columns()
+        for index, chip in enumerate(chips):
+            self.category_grid.addWidget(chip, index // columns, index % columns)
 
     def _handle_category_selected(self, slug: str, checked: bool) -> None:
         self._selected_category_slug = None if slug == "all" else (slug if checked else None)
@@ -226,23 +234,30 @@ class HomePage(QWidget):
             parts.append(translate(language_code, "home.filter.search", value=dashboard.search_text))
         if dashboard.selected_category_name:
             parts.append(translate(language_code, "home.filter.category", value=dashboard.selected_category_name))
-        self.active_filters_label.setText(" • ".join(parts))
+        self.active_filters_label.setText(" - ".join(parts))
         self.active_filters_card.show()
 
     def _render_recipe_sections(self, recipes: list[RecipeListItem], featured_recipes: list[RecipeListItem]) -> None:
         self._clear_grid(self.featured_grid)
         self._clear_grid(self.latest_grid)
         language_code = self._dashboard_data.context.language_code if self._dashboard_data else "en"
+        self._latest_recipes = recipes
+        self._featured_recipes = featured_recipes
+        latest_columns = self._recipe_columns()
+        featured_columns = min(3, latest_columns)
+        card_width = self._recipe_card_width(latest_columns)
 
         for index, recipe in enumerate(featured_recipes[:3]):
             card = RecipeCard(recipe, self.image_service, language_code)
+            card.set_card_width(card_width)
             card.clicked.connect(self.recipe_selected.emit)
-            self.featured_grid.addWidget(card, 0, index)
+            self.featured_grid.addWidget(card, index // featured_columns, index % featured_columns)
 
         for index, recipe in enumerate(recipes):
-            row = index // 3
-            column = index % 3
+            row = index // latest_columns
+            column = index % latest_columns
             card = RecipeCard(recipe, self.image_service, language_code)
+            card.set_card_width(card_width)
             card.clicked.connect(self.recipe_selected.emit)
             self.latest_grid.addWidget(card, row, column)
 
@@ -265,17 +280,28 @@ class HomePage(QWidget):
         self.empty_state.setVisible(not has_recipes)
 
     @staticmethod
-    def _clear_box(layout: QHBoxLayout) -> None:
-        while layout.count():
-            item = layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-
-    @staticmethod
     def _clear_grid(layout: QGridLayout) -> None:
         while layout.count():
             item = layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self._dashboard_data is not None:
+            self._populate_tags(self._dashboard_data)
+            self._populate_categories(self._dashboard_data)
+            self._render_recipe_sections(self._latest_recipes, self._featured_recipes)
+
+    def _recipe_columns(self) -> int:
+        width = max(self.width() - 80, 280)
+        return max(1, min(4, width // 340))
+
+    def _recipe_card_width(self, columns: int) -> int:
+        width = max(self.width() - 120, 280)
+        return max(280, min(380, (width - ((columns - 1) * 16)) // max(columns, 1)))
+
+    def _chip_columns(self) -> int:
+        width = max(self.width() - 80, 220)
+        return max(1, min(6, width // 180))

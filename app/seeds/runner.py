@@ -104,10 +104,6 @@ def _get_or_create_app_setting(
         )
         session.add(app_setting)
         session.flush()
-    else:
-        app_setting.ui_language_id = target_language.id
-        app_setting.theme_name = DEFAULT_APP_SETTING["theme_name"]
-        app_setting.layout_direction = DEFAULT_APP_SETTING["layout_direction"]
     return app_setting
 
 

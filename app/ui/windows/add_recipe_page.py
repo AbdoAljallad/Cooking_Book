@@ -26,6 +26,8 @@ from app.services import (
     AppContextService,
     CategoryService,
     CreateRecipeInput,
+    CreateRecipeIngredientInput,
+    CreateRecipeStepInput,
     ImageService,
     RecipeService,
     TagService,
@@ -43,6 +45,7 @@ from app.utils.i18n import translate
 class AddRecipePage(QWidget):
     back_requested = Signal()
     recipe_created = Signal(int)
+    recipe_updated = Signal(int)
 
     def __init__(
         self,
@@ -67,6 +70,8 @@ class AddRecipePage(QWidget):
         self.step_rows: list[StepFormRow] = []
         self.available_units: list[tuple[int, str]] = []
         self._current_language_code = "en"
+        self._editing_recipe_id: int | None = None
+        self._editing_image_path: str | None = None
 
         self._build_ui()
         self.load_form_options()
@@ -278,6 +283,42 @@ class AddRecipePage(QWidget):
         self.root_layout.addWidget(self.steps_card)
 
     def load_form_options(self) -> None:
+        self._editing_recipe_id = None
+        self._editing_image_path = None
+        self._load_form_options(reset_form=True)
+
+    def load_recipe_for_edit(self, recipe_id: int) -> None:
+        recipe_data = self.recipe_service.get_recipe_for_edit(recipe_id)
+        if recipe_data is None:
+            raise ValueError("Recipe not found.")
+
+        self._editing_recipe_id = recipe_id
+        self._editing_image_path = recipe_data.image_path
+        self._load_form_options(reset_form=True)
+
+        self.title_en_input.setText(recipe_data.title_en)
+        self.title_ar_input.setText(recipe_data.title_ar or "")
+        self.title_ru_input.setText(recipe_data.title_ru or "")
+        self.description_en_input.setPlainText(recipe_data.short_description_en or "")
+        self.description_ar_input.setPlainText(recipe_data.short_description_ar or "")
+        self.description_ru_input.setPlainText(recipe_data.short_description_ru or "")
+        self.prep_time_input.setValue(recipe_data.prep_time_minutes)
+        self.cook_time_input.setValue(recipe_data.cook_time_minutes)
+        self.base_servings_input.setValue(float(recipe_data.base_servings))
+        self._select_combo_by_text_or_data(self.category_combo, str(recipe_data.category_id))
+        self._select_combo_by_text_or_data(self.difficulty_combo, recipe_data.difficulty_level)
+        self._select_combo_by_text_or_data(self.source_type_combo, recipe_data.source_type)
+
+        selected_tag_ids = set(recipe_data.tag_ids)
+        for chip, tag in self.tag_chips:
+            chip.setChecked(tag.id in selected_tag_ids)
+
+        self._set_ingredient_rows(recipe_data.ingredients)
+        self._set_step_rows(recipe_data.steps)
+        self.error_banner.hide()
+        self._apply_translations(self._current_language_code)
+
+    def _load_form_options(self, *, reset_form: bool) -> None:
         context = self.context_service.get_context()
         self._current_language_code = context.language_code
 
@@ -295,8 +336,10 @@ class AddRecipePage(QWidget):
         self._populate_difficulty_options()
         self._populate_source_options()
         self._populate_tag_chips(tags)
-        self._reset_static_fields()
-        self._reset_rows([(unit.id, unit.display_name) for unit in units])
+        self.available_units = [(unit.id, unit.display_name) for unit in units]
+        if reset_form:
+            self._reset_static_fields()
+            self._reset_rows(self.available_units)
 
     def _safe_translate(self, language_code: str, key: str, fallback: str) -> str:
         value = translate(language_code, key)
@@ -304,12 +347,28 @@ class AddRecipePage(QWidget):
 
     def _apply_translations(self, language_code: str) -> None:
         self.back_button.setText(translate(language_code, "add_recipe.back"))
-        self.save_button.setText(translate(language_code, "add_recipe.save"))
-        self.import_button.setText("Import Recipe")
+        self.save_button.setText(
+            translate(language_code, "add_recipe.update")
+            if self._editing_recipe_id is not None
+            else translate(language_code, "add_recipe.save")
+        )
+        self.import_button.setText(translate(language_code, "add_recipe.import"))
 
-        self.eyebrow.setText(translate(language_code, "add_recipe.eyebrow"))
-        self.title_label.setText(translate(language_code, "add_recipe.title"))
-        self.subtitle_label.setText(translate(language_code, "add_recipe.subtitle"))
+        self.eyebrow.setText(
+            translate(language_code, "add_recipe.edit_eyebrow")
+            if self._editing_recipe_id is not None
+            else translate(language_code, "add_recipe.eyebrow")
+        )
+        self.title_label.setText(
+            translate(language_code, "add_recipe.edit_title")
+            if self._editing_recipe_id is not None
+            else translate(language_code, "add_recipe.title")
+        )
+        self.subtitle_label.setText(
+            translate(language_code, "add_recipe.edit_subtitle")
+            if self._editing_recipe_id is not None
+            else translate(language_code, "add_recipe.subtitle")
+        )
 
         self.basic_info_header.set_content(
             translate(language_code, "add_recipe.basic_info_title"),
@@ -479,16 +538,26 @@ class AddRecipePage(QWidget):
 
         try:
             recipe_input = self._build_create_input()
-            recipe_id = self.recipe_service.create_recipe(
-                recipe_input,
-                created_by_profile_id=context.profile_id,
-            )
+            if self._editing_recipe_id is None:
+                recipe_id = self.recipe_service.create_recipe(
+                    recipe_input,
+                    created_by_profile_id=context.profile_id,
+                )
+            else:
+                recipe_id = self.recipe_service.update_recipe(
+                    self._editing_recipe_id,
+                    recipe_input,
+                )
         except Exception as exc:
             self._show_error(str(exc))
             return
 
         self.error_banner.hide()
-        self.recipe_created.emit(recipe_id)
+        if self._editing_recipe_id is None:
+            self.recipe_created.emit(recipe_id)
+            return
+
+        self.recipe_updated.emit(recipe_id)
 
     def _build_create_input(self) -> CreateRecipeInput:
         return CreateRecipeInput(
@@ -499,7 +568,7 @@ class AddRecipePage(QWidget):
             short_description_ar=self.description_ar_input.toPlainText() or None,
             short_description_ru=self.description_ru_input.toPlainText() or None,
             category_id=self.category_combo.currentData(),
-            image_path=None,
+            image_path=self._editing_image_path,
             prep_time_minutes=self.prep_time_input.value(),
             cook_time_minutes=self.cook_time_input.value(),
             base_servings=Decimal(str(self.base_servings_input.value())),
@@ -510,6 +579,40 @@ class AddRecipePage(QWidget):
             steps=[row.to_input() for row in self.step_rows],
             image_input=self.image_input_card.recipe_image_input(),
         )
+
+    def _set_ingredient_rows(self, ingredients: list[CreateRecipeIngredientInput]) -> None:
+        self._reset_rows(self.available_units)
+        if not ingredients:
+            return
+
+        while len(self.ingredient_rows) < len(ingredients):
+            self._add_ingredient_row()
+
+        while len(self.ingredient_rows) > len(ingredients):
+            self._remove_ingredient_row(self.ingredient_rows[-1])
+
+        for row, ingredient in zip(self.ingredient_rows, ingredients):
+            row.name_en_input.setText(ingredient.name_en)
+            row.name_ar_input.setText(ingredient.name_ar or "")
+            row.name_ru_input.setText(ingredient.name_ru or "")
+            row.quantity_input.setValue(float(ingredient.quantity) if ingredient.quantity is not None else 0.0)
+            row.quantity_override_input.setText(ingredient.quantity_text_override or "")
+            row.preparation_note_input.setText(ingredient.preparation_note or "")
+            row.scalable_checkbox.setChecked(ingredient.is_scalable)
+            self._select_combo_by_text_or_data(row.unit_combo, str(ingredient.unit_id))
+
+    def _set_step_rows(self, steps: list[CreateRecipeStepInput]) -> None:
+        while len(self.step_rows) < len(steps):
+            self._add_step_row()
+
+        while len(self.step_rows) > len(steps) and len(self.step_rows) > 1:
+            self._remove_step_row(self.step_rows[-1])
+
+        for row, step in zip(self.step_rows, steps):
+            row.instruction_en_input.setPlainText(step.instruction_en)
+            row.instruction_ar_input.setPlainText(step.instruction_ar or "")
+            row.instruction_ru_input.setPlainText(step.instruction_ru or "")
+            row.estimated_minutes_input.setValue(step.estimated_minutes or 0)
 
     def _open_import_dialog(self) -> None:
         dialog = QDialog(self)

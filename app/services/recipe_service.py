@@ -23,7 +23,10 @@ from app.repositories import IngredientRepository, RecipeListItem, RecipeReposit
 from app.services.base import BaseService
 from app.services.image_service import ImageService, ImageValidationError
 from app.services.models import (
+    CreateRecipeIngredientInput,
     CreateRecipeInput,
+    CreateRecipeStepInput,
+    EditRecipeFormData,
     RecipeDetailsData,
     RecipeIngredientDetail,
     RecipeStepDetail,
@@ -245,6 +248,216 @@ class RecipeService(BaseService):
                 session.commit()
                 return recipe.id
 
+            except Exception:
+                session.rollback()
+                raise
+
+    def get_recipe_for_edit(self, recipe_id: int) -> EditRecipeFormData | None:
+        recipe = self.get_recipe(recipe_id)
+        if recipe is None:
+            return None
+
+        title_by_language: dict[str, str | None] = {"en": None, "ar": None, "ru": None}
+        description_by_language: dict[str, str | None] = {"en": None, "ar": None, "ru": None}
+
+        for translation in recipe.translations:
+            language = getattr(translation, "language", None)
+            if language is None or language.code not in title_by_language:
+                continue
+            title_by_language[language.code] = translation.title
+            description_by_language[language.code] = translation.short_description
+
+        tag_ids = [tag_link.tag_id for tag_link in recipe.tag_links]
+
+        ingredients: list[CreateRecipeIngredientInput] = []
+        for ingredient in recipe.ingredients:
+            names: dict[str, str | None] = {"en": None, "ar": None, "ru": None}
+            if ingredient.ingredient is not None:
+                for translation in ingredient.ingredient.translations:
+                    language = getattr(translation, "language", None)
+                    if language is None or language.code not in names:
+                        continue
+                    names[language.code] = translation.name
+
+            ingredients.append(
+                CreateRecipeIngredientInput(
+                    name_en=names["en"] or "",
+                    name_ar=names["ar"],
+                    name_ru=names["ru"],
+                    quantity=ingredient.quantity,
+                    unit_id=ingredient.unit_id,
+                    is_scalable=ingredient.is_scalable,
+                    preparation_note=ingredient.preparation_note,
+                    quantity_text_override=ingredient.text_override,
+                )
+            )
+
+        steps: list[CreateRecipeStepInput] = []
+        for step in recipe.steps:
+            instructions: dict[str, str | None] = {"en": None, "ar": None, "ru": None}
+            for translation in step.translations:
+                language = getattr(translation, "language", None)
+                if language is None or language.code not in instructions:
+                    continue
+                instructions[language.code] = translation.instruction
+
+            steps.append(
+                CreateRecipeStepInput(
+                    instruction_en=instructions["en"] or "",
+                    instruction_ar=instructions["ar"],
+                    instruction_ru=instructions["ru"],
+                    estimated_minutes=step.estimated_minutes,
+                )
+            )
+
+        return EditRecipeFormData(
+            recipe_id=recipe.id,
+            title_en=title_by_language["en"] or "",
+            title_ar=title_by_language["ar"],
+            title_ru=title_by_language["ru"],
+            short_description_en=description_by_language["en"],
+            short_description_ar=description_by_language["ar"],
+            short_description_ru=description_by_language["ru"],
+            category_id=recipe.category_id,
+            image_path=recipe.image_path,
+            prep_time_minutes=recipe.prep_time_minutes,
+            cook_time_minutes=recipe.cook_time_minutes,
+            base_servings=recipe.base_servings,
+            difficulty_level=recipe.difficulty_level.value,
+            source_type=recipe.source_type.value,
+            tag_ids=tag_ids,
+            ingredients=ingredients,
+            steps=steps,
+        )
+
+    def update_recipe(
+        self,
+        recipe_id: int,
+        input_data: CreateRecipeInput,
+    ) -> int:
+        self._validate_create_input(input_data)
+
+        with self._open_session() as session:
+            try:
+                recipe = RecipeRepository(session).get_by_id(recipe_id)
+                if recipe is None:
+                    raise RecipeValidationError(
+                        translate("en", "details.feedback.recipe_missing")
+                    )
+
+                english = self._get_language(session, "en")
+                arabic = self._get_language(session, "ar")
+                russian = self._get_language(session, "ru")
+
+                recipe.category_id = input_data.category_id
+                recipe.prep_time_minutes = input_data.prep_time_minutes
+                recipe.cook_time_minutes = input_data.cook_time_minutes
+                recipe.base_servings = input_data.base_servings
+                recipe.difficulty_level = DifficultyLevel(input_data.difficulty_level)
+                recipe.source_type = RecipeSourceType(input_data.source_type)
+
+                self._upsert_recipe_translation(
+                    session,
+                    recipe.id,
+                    english.id,
+                    input_data.title_en,
+                    input_data.short_description_en,
+                )
+                self._upsert_recipe_translation(
+                    session,
+                    recipe.id,
+                    arabic.id,
+                    input_data.title_ar or "",
+                    input_data.short_description_ar,
+                )
+                self._upsert_recipe_translation(
+                    session,
+                    recipe.id,
+                    russian.id,
+                    input_data.title_ru or "",
+                    input_data.short_description_ru,
+                )
+
+                recipe.tag_links.clear()
+                recipe.tag_links.extend(RecipeTag(recipe_id=recipe.id, tag_id=tag_id) for tag_id in input_data.tag_ids)
+
+                ingredient_repository = IngredientRepository(session)
+                recipe.ingredients.clear()
+                session.flush()
+
+                for index, ingredient_input in enumerate(input_data.ingredients, start=1):
+                    ingredient = self._resolve_or_create_ingredient(
+                        session=session,
+                        ingredient_repository=ingredient_repository,
+                        english_language_id=english.id,
+                        arabic_language_id=arabic.id,
+                        russian_language_id=russian.id,
+                        name_en=ingredient_input.name_en,
+                        name_ar=ingredient_input.name_ar,
+                        name_ru=ingredient_input.name_ru,
+                        default_unit_id=ingredient_input.unit_id,
+                    )
+                    recipe.ingredients.append(
+                        RecipeIngredient(
+                            ingredient_id=ingredient.id,
+                            unit_id=ingredient_input.unit_id,
+                            quantity=ingredient_input.quantity,
+                            is_scalable=ingredient_input.is_scalable,
+                            sort_order=index,
+                            preparation_note=self._clean_optional_text(ingredient_input.preparation_note),
+                            text_override=self._clean_optional_text(ingredient_input.quantity_text_override),
+                        )
+                    )
+
+                recipe.steps.clear()
+                session.flush()
+
+                for index, step_input in enumerate(input_data.steps, start=1):
+                    step = RecipeStep(
+                        sort_order=index,
+                        estimated_minutes=step_input.estimated_minutes,
+                    )
+                    step.translations.extend(
+                        [
+                            RecipeStepTranslation(
+                                language_id=english.id,
+                                instruction=step_input.instruction_en.strip(),
+                            ),
+                            RecipeStepTranslation(
+                                language_id=arabic.id,
+                                instruction=(step_input.instruction_ar or "").strip(),
+                            ),
+                            RecipeStepTranslation(
+                                language_id=russian.id,
+                                instruction=(step_input.instruction_ru or "").strip(),
+                            ),
+                        ]
+                    )
+                    recipe.steps.append(step)
+
+                if input_data.image_input is not None:
+                    if self.image_service is None:
+                        raise RecipeValidationError(
+                            translate("en", "service.validation.image_not_configured")
+                        )
+                    recipe.image_path = self.image_service.store_recipe_image(recipe.id, input_data.image_input)
+
+                session.commit()
+                return recipe.id
+            except Exception:
+                session.rollback()
+                raise
+
+    def delete_recipe(self, recipe_id: int) -> None:
+        with self._open_session() as session:
+            try:
+                recipe = RecipeRepository(session).get_by_id(recipe_id)
+                if recipe is None:
+                    raise RecipeValidationError(
+                        translate("en", "details.feedback.recipe_missing")
+                    )
+                session.delete(recipe)
+                session.commit()
             except Exception:
                 session.rollback()
                 raise
@@ -763,6 +976,40 @@ class RecipeService(BaseService):
 
         if not existing_translation.name:
             existing_translation.name = cleaned_name
+
+    def _upsert_recipe_translation(
+        self,
+        session: Session,
+        recipe_id: int,
+        language_id: int,
+        title: str,
+        description: str | None,
+    ) -> None:
+        translation = (
+            session.query(RecipeTranslation)
+            .filter(
+                RecipeTranslation.recipe_id == recipe_id,
+                RecipeTranslation.language_id == language_id,
+            )
+            .first()
+        )
+
+        cleaned_title = title.strip()
+        cleaned_description = self._clean_optional_text(description)
+
+        if translation is None:
+            session.add(
+                RecipeTranslation(
+                    recipe_id=recipe_id,
+                    language_id=language_id,
+                    title=cleaned_title,
+                    short_description=cleaned_description,
+                )
+            )
+            return
+
+        translation.title = cleaned_title
+        translation.short_description = cleaned_description
 
     @staticmethod
     def _clean_optional_text(value: str | None) -> str | None:

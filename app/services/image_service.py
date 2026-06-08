@@ -27,6 +27,7 @@ class ImageService:
         self.placeholder_path = self.placeholders_dir / "no_image.png"
         self._pixmap_cache: dict[str, QPixmap] = {}
         self._cover_cache: dict[tuple[str, int, int], QPixmap] = {}
+        self._contain_cache: dict[tuple[str, int, int], QPixmap] = {}
         self._ensure_directories()
         self.ensure_placeholder_image()
 
@@ -130,6 +131,26 @@ class ImageService:
         self._cover_cache[cache_key] = cover
         return cover
 
+    def get_contain_pixmap(self, stored_path: str | None, width: int, height: int) -> QPixmap:
+        source_pixmap = self.get_pixmap(stored_path)
+        if source_pixmap.isNull():
+            return QPixmap()
+
+        display_path = self.resolve_display_path(stored_path)
+        cache_key = (str(display_path.resolve()), width, height)
+        cached = self._contain_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        contained = source_pixmap.scaled(
+            width,
+            height,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self._contain_cache[cache_key] = contained
+        return contained
+
     def _ensure_directories(self) -> None:
         self.recipes_dir.mkdir(parents=True, exist_ok=True)
         self.placeholders_dir.mkdir(parents=True, exist_ok=True)
@@ -140,3 +161,6 @@ class ImageService:
         stale_cover_keys = [key for key in self._cover_cache if key[0] == resolved]
         for key in stale_cover_keys:
             self._cover_cache.pop(key, None)
+        stale_contain_keys = [key for key in self._contain_cache if key[0] == resolved]
+        for key in stale_contain_keys:
+            self._contain_cache.pop(key, None)

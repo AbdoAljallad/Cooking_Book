@@ -100,16 +100,22 @@ def build_stylesheet(theme: ThemeDefinition) -> str:
         color: {colors.text_secondary};
         border: 1px solid transparent;
         border-radius: {radii.md}px;
-        min-height: 42px;
+        min-height: 46px;
         padding: 0 {spacing.md}px;
         text-align: left;
         font-weight: 700;
+        icon-size: 18px;
     }}
 
     QPushButton#navButton:hover {{
         color: {colors.text_primary};
         background-color: {colors.surface_alt};
         border-color: {colors.border};
+    }}
+
+    QPushButton#navButton[navUtility="true"] {{
+        min-height: 40px;
+        font-weight: 600;
     }}
 
     QPushButton#navButton[active="true"] {{

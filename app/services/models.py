@@ -117,6 +117,27 @@ class CreateRecipeInput:
 
 
 @dataclass(frozen=True, slots=True)
+class EditRecipeFormData:
+    recipe_id: int
+    title_en: str
+    title_ar: str | None
+    title_ru: str | None
+    short_description_en: str | None
+    short_description_ar: str | None
+    short_description_ru: str | None
+    category_id: int
+    image_path: str | None
+    prep_time_minutes: int
+    cook_time_minutes: int
+    base_servings: Decimal
+    difficulty_level: str
+    source_type: str
+    tag_ids: list[int]
+    ingredients: list[CreateRecipeIngredientInput]
+    steps: list[CreateRecipeStepInput]
+
+
+@dataclass(frozen=True, slots=True)
 class CreateRecipeFormData:
     context: AppContext
     categories: list[LocalizedCategory]

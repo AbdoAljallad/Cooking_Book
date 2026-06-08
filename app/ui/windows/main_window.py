@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QMainWindow,
     QPushButton,
     QSizePolicy,
@@ -170,8 +171,9 @@ class MainWindow(QMainWindow):
             recipe_service=self.recipe_service,
             image_service=self.image_service,
         )
-        self.add_recipe_page.back_requested.connect(self._show_home_page)
+        self.add_recipe_page.back_requested.connect(self._return_from_add_recipe)
         self.add_recipe_page.recipe_created.connect(self._handle_recipe_created)
+        self.add_recipe_page.recipe_updated.connect(self._handle_recipe_updated)
 
         self.settings_page = SettingsPage(
             context_service=self.context_service,
@@ -180,7 +182,13 @@ class MainWindow(QMainWindow):
         self.settings_page.back_requested.connect(self._show_home_page)
         self.settings_page.settings_applied.connect(self._handle_settings_applied)
 
-        self.categories_page = CategoriesPage(self.context_service)
+        self.categories_page = CategoriesPage(
+            context_service=self.context_service,
+            category_service=self.category_service,
+            recipe_service=self.recipe_service,
+            image_service=self.image_service,
+        )
+        self.categories_page.recipe_selected.connect(self._open_recipe_details)
 
         self.recipe_details_page = RecipeDetailsPage(
             recipe_service=self.recipe_service,
@@ -189,16 +197,18 @@ class MainWindow(QMainWindow):
         )
         self.recipe_details_page.back_requested.connect(self._return_from_details)
         self.recipe_details_page.favorite_changed.connect(self._handle_favorite_changed)
+        self.recipe_details_page.edit_requested.connect(self._edit_recipe)
+        self.recipe_details_page.delete_requested.connect(self._delete_recipe)
 
         content_shell = QHBoxLayout()
         content_shell.setSpacing(18)
         self.side_nav = SideNav(
             [
-                NavItem("home", "nav.home", "H"),
-                NavItem("add", "nav.add_recipe", "+"),
-                NavItem("favorites", "nav.favorites", "*"),
-                NavItem("categories", "nav.categories", "C"),
-                NavItem("settings", "nav.settings", "S"),
+                NavItem("home", "nav.home", "home"),
+                NavItem("add", "nav.add_recipe", "add"),
+                NavItem("favorites", "nav.favorites", "favorites"),
+                NavItem("categories", "nav.categories", "categories"),
+                NavItem("settings", "nav.settings", "settings"),
             ]
         )
         self.side_nav.setFixedWidth(230)
@@ -307,6 +317,13 @@ class MainWindow(QMainWindow):
             return
         self._show_home_page()
 
+    def _return_from_add_recipe(self) -> None:
+        if self._return_page is self.recipe_details_page and self.recipe_details_page.current_recipe_id is not None:
+            self.recipe_details_page.load_recipe(self.recipe_details_page.current_recipe_id)
+            self.page_stack.setCurrentWidget(self.recipe_details_page)
+            return
+        self._show_home_page()
+
     def _show_add_recipe_page(self) -> None:
         self._active_page_key = "add"
         self.side_nav.set_active("add")
@@ -341,7 +358,11 @@ class MainWindow(QMainWindow):
             self.recipe_details_page.refresh_language()
 
     def _handle_recipe_created(self, recipe_id: int) -> None:
-        self._mark_pages_dirty("home", "categories")
+        self._mark_pages_dirty("home", "categories", "favorites")
+        self._open_recipe_details(recipe_id)
+
+    def _handle_recipe_updated(self, recipe_id: int) -> None:
+        self._mark_pages_dirty("home", "favorites", "categories")
         self._open_recipe_details(recipe_id)
 
     def _handle_settings_applied(self, context: AppContext) -> None:
@@ -404,3 +425,25 @@ class MainWindow(QMainWindow):
 
     def _handle_favorite_changed(self, _is_favorite: bool) -> None:
         self._mark_pages_dirty("favorites")
+
+    def _edit_recipe(self, recipe_id: int) -> None:
+        try:
+            self.add_recipe_page.load_recipe_for_edit(recipe_id)
+        except Exception as exc:
+            QMessageBox.warning(self, self.windowTitle(), str(exc))
+            return
+
+        self._return_page = self.recipe_details_page
+        self._active_page_key = "add"
+        self.side_nav.set_active("add")
+        self.page_stack.setCurrentWidget(self.add_recipe_page)
+
+    def _delete_recipe(self, recipe_id: int) -> None:
+        try:
+            self.recipe_service.delete_recipe(recipe_id)
+        except Exception as exc:
+            QMessageBox.warning(self, self.windowTitle(), str(exc))
+            return
+
+        self._mark_pages_dirty("home", "favorites", "categories")
+        self._show_home_page()

@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QTextEdit,
@@ -29,6 +30,8 @@ from app.utils.i18n import translate
 class RecipeDetailsPage(QWidget):
     back_requested = Signal()
     favorite_changed = Signal(bool)
+    edit_requested = Signal(int)
+    delete_requested = Signal(int)
 
     def __init__(
         self,
@@ -45,6 +48,7 @@ class RecipeDetailsPage(QWidget):
         self.base_details: RecipeDetailsData | None = None
         self.current_profile_id: int | None = None
         self.current_language_code = "en"
+        self.current_recipe_title = ""
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -70,6 +74,17 @@ class RecipeDetailsPage(QWidget):
         self.back_button.setObjectName("secondaryButton")
         self.back_button.clicked.connect(self.back_requested.emit)
         back_row.addWidget(self.back_button, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        self.edit_button = QPushButton()
+        self.edit_button.setObjectName("secondaryButton")
+        self.edit_button.clicked.connect(self._request_edit)
+        back_row.addWidget(self.edit_button, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        self.delete_button = QPushButton()
+        self.delete_button.setObjectName("secondaryButton")
+        self.delete_button.clicked.connect(self._confirm_delete)
+        back_row.addWidget(self.delete_button, alignment=Qt.AlignmentFlag.AlignLeft)
+
         back_row.addStretch(1)
         self.layout_root.addLayout(back_row)
 
@@ -107,7 +122,8 @@ class RecipeDetailsPage(QWidget):
 
         self.image_label = QLabel()
         self.image_label.setObjectName("recipeImage")
-        self.image_label.setMinimumHeight(260)
+        self.image_label.setMinimumHeight(320)
+        self.image_label.setMaximumHeight(420)
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.hero_card.content_layout.addWidget(self.image_label)
 
@@ -258,6 +274,7 @@ class RecipeDetailsPage(QWidget):
 
         self.current_recipe_id = recipe_id
         self.base_details = details
+        self.current_recipe_title = details.title
         self.note_editor.setPlainText(details.personal_note or "")
         self.rating_control.set_rating(details.personal_rating)
         self._sync_favorite_button(details.is_favorite)
@@ -333,6 +350,8 @@ class RecipeDetailsPage(QWidget):
         code = self.current_language_code
 
         self.back_button.setText(translate(code, "details.back"))
+        self.edit_button.setText(translate(code, "details.edit"))
+        self.delete_button.setText(translate(code, "details.delete"))
 
         self.meta_header.set_content(
             translate(code, "details.meta_title"),
@@ -420,7 +439,9 @@ class RecipeDetailsPage(QWidget):
         self.missing_state.show()
 
     def _set_image(self, image_path: str | None, title: str) -> None:
-        pixmap = self.image_service.get_cover_pixmap(image_path, 940, 300)
+        target_width = max(self.image_label.width(), 720)
+        target_height = max(self.image_label.height(), 320)
+        pixmap = self.image_service.get_contain_pixmap(image_path, target_width, target_height)
 
         if not pixmap.isNull():
             self.image_label.setPixmap(pixmap)
@@ -429,6 +450,11 @@ class RecipeDetailsPage(QWidget):
 
         self.image_label.clear()
         self.image_label.setText(title)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self.base_details is not None:
+            self._set_image(self.base_details.image_path, self.base_details.title)
 
     def _populate_meta(self, details: RecipeDetailsData) -> None:
         self._clear_grid(self.meta_grid)
@@ -721,6 +747,32 @@ class RecipeDetailsPage(QWidget):
     def _show_feedback(self, message: str) -> None:
         self.detail_feedback.setText(message)
         self.detail_feedback.show()
+
+    def _request_edit(self) -> None:
+        if self.current_recipe_id is not None:
+            self.edit_requested.emit(self.current_recipe_id)
+
+    def _confirm_delete(self) -> None:
+        if self.current_recipe_id is None:
+            return
+
+        title = translate(self.current_language_code, "details.delete_confirm_title")
+        text = translate(
+            self.current_language_code,
+            "details.delete_confirm_text",
+            title=self.current_recipe_title or translate(self.current_language_code, "details.recipe_label"),
+        )
+
+        result = QMessageBox.question(
+            self,
+            title,
+            text,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if result == QMessageBox.StandardButton.Yes:
+            self.delete_requested.emit(self.current_recipe_id)
 
     @staticmethod
     def _clear_box(layout: QHBoxLayout) -> None:

@@ -31,6 +31,7 @@ from app.services import (
     TagService,
     UnitService,
 )
+from app.ui.branding import load_app_icon, load_brand_pixmap
 from app.ui.components.side_nav import NavItem, SideNav
 from app.ui.themes.manager import ThemeManager
 from app.ui.windows.add_recipe_page import AddRecipePage
@@ -66,6 +67,7 @@ class MainWindow(QMainWindow):
         )
 
         self.setWindowTitle("Premium Cookbook")
+        self.setWindowIcon(load_app_icon())
         self._set_initial_window_size()
         self.setMinimumSize(920, 620)
 
@@ -74,6 +76,12 @@ class MainWindow(QMainWindow):
         self._start_database_monitor()
         self._return_page = None
         self._active_page_key = "home"
+        self._dirty_pages = {
+            "home": False,
+            "favorites": False,
+            "categories": False,
+            "settings": False,
+        }
 
     def _set_initial_window_size(self) -> None:
         screen = QApplication.primaryScreen()
@@ -106,6 +114,13 @@ class MainWindow(QMainWindow):
 
         top_bar = QHBoxLayout()
         top_bar.setSpacing(16)
+
+        self.brand_logo = QLabel()
+        self.brand_logo.setObjectName("brandLogo")
+        self.brand_logo.setPixmap(load_brand_pixmap(64))
+        self.brand_logo.setFixedSize(72, 72)
+        self.brand_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        top_bar.addWidget(self.brand_logo, alignment=Qt.AlignmentFlag.AlignTop)
 
         brand_block = QVBoxLayout()
         brand_block.setSpacing(2)
@@ -173,6 +188,7 @@ class MainWindow(QMainWindow):
             image_service=self.image_service,
         )
         self.recipe_details_page.back_requested.connect(self._return_from_details)
+        self.recipe_details_page.favorite_changed.connect(self._handle_favorite_changed)
 
         content_shell = QHBoxLayout()
         content_shell.setSpacing(18)
@@ -277,26 +293,17 @@ class MainWindow(QMainWindow):
         self.page_stack.setCurrentWidget(self.recipe_details_page)
 
     def _show_home_page(self) -> None:
-        self._active_page_key = "home"
-        self.side_nav.set_active("home")
-        self.home_page.reload()
-        self.page_stack.setCurrentWidget(self.home_page)
+        self._show_cached_page("home", self.home_page, self.home_page.reload)
 
-    def _show_favorites_page(self) -> None:
-        self._active_page_key = "favorites"
-        self.side_nav.set_active("favorites")
-        self.favorites_page.reload()
-        self.page_stack.setCurrentWidget(self.favorites_page)
+    def _show_favorites_page(self, force_refresh: bool = False) -> None:
+        self._show_cached_page("favorites", self.favorites_page, self.favorites_page.reload, force_refresh=force_refresh)
 
     def _show_settings_page(self) -> None:
-        self._active_page_key = "settings"
-        self.side_nav.set_active("settings")
-        self.settings_page.reload()
-        self.page_stack.setCurrentWidget(self.settings_page)
+        self._show_cached_page("settings", self.settings_page, self.settings_page.reload)
 
     def _return_from_details(self) -> None:
         if self._return_page is self.favorites_page:
-            self._show_favorites_page()
+            self._show_favorites_page(force_refresh=self._dirty_pages.get("favorites", False))
             return
         self._show_home_page()
 
@@ -307,10 +314,7 @@ class MainWindow(QMainWindow):
         self.page_stack.setCurrentWidget(self.add_recipe_page)
 
     def _show_categories_page(self) -> None:
-        self._active_page_key = "categories"
-        self.side_nav.set_active("categories")
-        self.categories_page.reload()
-        self.page_stack.setCurrentWidget(self.categories_page)
+        self._show_cached_page("categories", self.categories_page, self.categories_page.reload)
 
     def _show_page(self, key: str) -> None:
         if key == "home":
@@ -328,13 +332,16 @@ class MainWindow(QMainWindow):
         widget = self.page_stack.currentWidget()
         if hasattr(widget, "reload"):
             widget.reload()
+            key = self._page_key_for_widget(widget)
+            if key is not None:
+                self._dirty_pages[key] = False
         elif widget is self.add_recipe_page:
             self.add_recipe_page.load_form_options()
         elif widget is self.recipe_details_page:
             self.recipe_details_page.refresh_language()
 
     def _handle_recipe_created(self, recipe_id: int) -> None:
-        self.home_page.reload()
+        self._mark_pages_dirty("home", "categories")
         self._open_recipe_details(recipe_id)
 
     def _handle_settings_applied(self, context: AppContext) -> None:
@@ -343,11 +350,10 @@ class MainWindow(QMainWindow):
         self.theme_selector.blockSignals(True)
         self.theme_selector.setCurrentText(context.theme_name)
         self.theme_selector.blockSignals(False)
-        self.home_page.reload()
-        self.favorites_page.reload()
-        self.add_recipe_page.load_form_options()
-        self.recipe_details_page.refresh_language()
-        self.categories_page.reload()
+        self._mark_pages_dirty("home", "favorites", "categories", "settings")
+        self._refresh_active_page()
+        if self.page_stack.currentWidget() is self.add_recipe_page:
+            self.add_recipe_page.load_form_options()
 
     def _refresh_texts(self) -> None:
         language_code = self.current_context.language_code
@@ -364,3 +370,37 @@ class MainWindow(QMainWindow):
             self.connection_badge.setText(translate(language_code, "status.database_connected"))
         elif status == "error":
             self.connection_badge.setText(translate(language_code, "status.database_unavailable"))
+
+    def _show_cached_page(
+        self,
+        key: str,
+        widget: QWidget,
+        reload_callback,
+        *,
+        force_refresh: bool = False,
+    ) -> None:
+        self._active_page_key = key
+        self.side_nav.set_active(key)
+        if force_refresh or self._dirty_pages.get(key, False):
+            reload_callback()
+            self._dirty_pages[key] = False
+        self.page_stack.setCurrentWidget(widget)
+
+    def _mark_pages_dirty(self, *keys: str) -> None:
+        for key in keys:
+            if key in self._dirty_pages:
+                self._dirty_pages[key] = True
+
+    def _page_key_for_widget(self, widget: QWidget) -> str | None:
+        if widget is self.home_page:
+            return "home"
+        if widget is self.favorites_page:
+            return "favorites"
+        if widget is self.categories_page:
+            return "categories"
+        if widget is self.settings_page:
+            return "settings"
+        return None
+
+    def _handle_favorite_changed(self, _is_favorite: bool) -> None:
+        self._mark_pages_dirty("favorites")

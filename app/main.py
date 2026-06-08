@@ -5,6 +5,7 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from app.config.settings import AppSettings, load_settings
+from app.ui.branding import load_app_icon
 from app.ui.themes.manager import ThemeManager
 from app.ui.windows.main_window import MainWindow
 
@@ -13,6 +14,7 @@ def create_application() -> QApplication:
     app = QApplication(sys.argv)
     app.setApplicationName("Premium Cookbook")
     app.setOrganizationName("Cooking Book")
+    app.setWindowIcon(load_app_icon())
     return app
 
 

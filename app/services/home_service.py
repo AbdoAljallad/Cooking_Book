@@ -19,6 +19,8 @@ class HomeService:
         self.category_service = category_service
         self.tag_service = tag_service
         self.recipe_service = recipe_service
+        self._categories_cache: dict[str, list] = {}
+        self._tags_cache: dict[str, list] = {}
 
     def get_dashboard_data(self) -> HomeDashboardData:
         return self.get_filtered_dashboard_data()
@@ -29,8 +31,8 @@ class HomeService:
         category_slug: str | None = None,
     ) -> HomeDashboardData:
         context = self.context_service.get_context()
-        categories = self.category_service.list_categories(context.language_code)
-        tags = self.tag_service.list_tags(context.language_code)
+        categories = self._get_categories(context.language_code)
+        tags = self._get_tags(context.language_code)
         normalized_query = query_text.strip()
         selected_category = next((item for item in categories if item.slug == category_slug), None)
         latest = self.recipe_service.list_filtered_recipes(
@@ -56,3 +58,17 @@ class HomeService:
 
     def search_dashboard_recipes(self, query_text: str) -> HomeDashboardData:
         return self.get_filtered_dashboard_data(query_text=query_text)
+
+    def _get_categories(self, language_code: str) -> list:
+        cached = self._categories_cache.get(language_code)
+        if cached is None:
+            cached = self.category_service.list_categories(language_code)
+            self._categories_cache[language_code] = cached
+        return cached
+
+    def _get_tags(self, language_code: str) -> list:
+        cached = self._tags_cache.get(language_code)
+        if cached is None:
+            cached = self.tag_service.list_tags(language_code)
+            self._tags_cache[language_code] = cached
+        return cached

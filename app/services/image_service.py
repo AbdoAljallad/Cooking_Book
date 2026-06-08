@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QFont, QImage, QImageReader, QLinearGradient, QPainter
+from PySide6.QtGui import QColor, QFont, QImage, QImageReader, QLinearGradient, QPainter, QPixmap
 
 from app.config.settings import BASE_DIR
 
@@ -25,6 +25,8 @@ class ImageService:
         self.recipes_dir = self.base_dir / "assets" / "images" / "recipes"
         self.placeholders_dir = self.base_dir / "assets" / "images" / "placeholders"
         self.placeholder_path = self.placeholders_dir / "no_image.png"
+        self._pixmap_cache: dict[str, QPixmap] = {}
+        self._cover_cache: dict[tuple[str, int, int], QPixmap] = {}
         self._ensure_directories()
         self.ensure_placeholder_image()
 
@@ -64,9 +66,13 @@ class ImageService:
         destination = self.build_recipe_image_path(recipe_id)
         if not normalized.save(str(destination), "PNG"):
             raise ImageValidationError("The image could not be stored in the managed recipe images folder.")
+        self._invalidate_path_cache(destination)
         return destination.relative_to(self.base_dir).as_posix()
 
     def ensure_placeholder_image(self) -> Path:
+        if self.placeholder_path.exists():
+            return self.placeholder_path
+
         image = QImage(1200, 800, QImage.Format.Format_ARGB32)
         gradient = QLinearGradient(0, 0, 1200, 800)
         gradient.setColorAt(0, QColor("#EEF2F7"))
@@ -90,6 +96,47 @@ class ImageService:
                 return absolute_path
         return self.ensure_placeholder_image()
 
+    def get_pixmap(self, stored_path: str | None) -> QPixmap:
+        display_path = self.resolve_display_path(stored_path)
+        cache_key = str(display_path.resolve())
+        cached = self._pixmap_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        pixmap = QPixmap(cache_key)
+        self._pixmap_cache[cache_key] = pixmap
+        return pixmap
+
+    def get_cover_pixmap(self, stored_path: str | None, width: int, height: int) -> QPixmap:
+        source_pixmap = self.get_pixmap(stored_path)
+        if source_pixmap.isNull():
+            return QPixmap()
+
+        display_path = self.resolve_display_path(stored_path)
+        cache_key = (str(display_path.resolve()), width, height)
+        cached = self._cover_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        scaled = source_pixmap.scaled(
+            width,
+            height,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        x = max((scaled.width() - width) // 2, 0)
+        y = max((scaled.height() - height) // 2, 0)
+        cover = scaled.copy(x, y, min(width, scaled.width()), min(height, scaled.height()))
+        self._cover_cache[cache_key] = cover
+        return cover
+
     def _ensure_directories(self) -> None:
         self.recipes_dir.mkdir(parents=True, exist_ok=True)
         self.placeholders_dir.mkdir(parents=True, exist_ok=True)
+
+    def _invalidate_path_cache(self, path: Path) -> None:
+        resolved = str(path.resolve())
+        self._pixmap_cache.pop(resolved, None)
+        stale_cover_keys = [key for key in self._cover_cache if key[0] == resolved]
+        for key in stale_cover_keys:
+            self._cover_cache.pop(key, None)

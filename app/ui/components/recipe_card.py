@@ -1,5 +1,4 @@
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QLabel, QSizePolicy, QWidget
 
 from app.repositories import RecipeListItem
@@ -23,6 +22,7 @@ class RecipeCard(BaseCard):
     ) -> None:
         super().__init__(parent)
         self.setObjectName("recipeCard")
+        self.image_service = image_service
         self.content_layout.setContentsMargins(
             self.CARD_PADDING,
             self.CARD_PADDING,
@@ -30,6 +30,7 @@ class RecipeCard(BaseCard):
             self.CARD_PADDING,
         )
         self.recipe = recipe
+        self._current_card_width: int | None = None
         self.setMinimumWidth(self.IMAGE_WIDTH)
         self.setMaximumWidth(390)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -40,10 +41,8 @@ class RecipeCard(BaseCard):
         image_label.setMinimumWidth(self.IMAGE_WIDTH)
         image_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        image_path = image_service.resolve_display_path(recipe.image_path)
-        self._source_pixmap = QPixmap(str(image_path))
-        image_label.setPixmap(self._cover_pixmap(self._source_pixmap, self.IMAGE_WIDTH, self.IMAGE_HEIGHT))
         self.image_label = image_label
+        self._update_image(self.IMAGE_WIDTH)
         self.content_layout.addWidget(image_label)
 
         category_label = QLabel(recipe.category_name or recipe.category_slug.replace("_", " ").title())
@@ -87,21 +86,20 @@ class RecipeCard(BaseCard):
 
     def set_card_width(self, width: int) -> None:
         safe_width = max(260, min(width, 390))
+        if self._current_card_width == safe_width:
+            return
+
+        self._current_card_width = safe_width
         self.setFixedWidth(safe_width)
         image_width = max(220, safe_width - (self.CARD_PADDING * 2))
         self.image_label.setFixedWidth(image_width)
-        self.image_label.setPixmap(self._cover_pixmap(self._source_pixmap, image_width, self.IMAGE_HEIGHT))
+        self._update_image(image_width)
 
-    @staticmethod
-    def _cover_pixmap(pixmap: QPixmap, width: int, height: int) -> QPixmap:
-        if pixmap.isNull():
-            return QPixmap()
-        scaled = pixmap.scaled(
-            width,
-            height,
-            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-            Qt.TransformationMode.SmoothTransformation,
+    def _update_image(self, width: int) -> None:
+        self.image_label.setPixmap(
+            self.image_service.get_cover_pixmap(
+                self.recipe.image_path,
+                width,
+                self.IMAGE_HEIGHT,
+            )
         )
-        x = max((scaled.width() - width) // 2, 0)
-        y = max((scaled.height() - height) // 2, 0)
-        return scaled.copy(x, y, min(width, scaled.width()), min(height, scaled.height()))

@@ -4,7 +4,6 @@ from __future__ import annotations
 from decimal import Decimal
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QGridLayout,
@@ -29,6 +28,7 @@ from app.utils.i18n import translate
 
 class RecipeDetailsPage(QWidget):
     back_requested = Signal()
+    favorite_changed = Signal(bool)
 
     def __init__(
         self,
@@ -420,22 +420,14 @@ class RecipeDetailsPage(QWidget):
         self.missing_state.show()
 
     def _set_image(self, image_path: str | None, title: str) -> None:
-        path = self.image_service.resolve_display_path(image_path)
-        pixmap = QPixmap(str(path))
+        pixmap = self.image_service.get_cover_pixmap(image_path, 940, 300)
 
         if not pixmap.isNull():
-            self.image_label.setPixmap(
-                pixmap.scaled(
-                    940,
-                    300,
-                    Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            )
+            self.image_label.setPixmap(pixmap)
             self.image_label.setText("")
             return
 
-        self.image_label.setPixmap(QPixmap())
+        self.image_label.clear()
         self.image_label.setText(title)
 
     def _populate_meta(self, details: RecipeDetailsData) -> None:
@@ -596,6 +588,7 @@ class RecipeDetailsPage(QWidget):
             )
 
         self._sync_favorite_button(is_favorite)
+        self.favorite_changed.emit(is_favorite)
 
         self._show_feedback(
             translate(

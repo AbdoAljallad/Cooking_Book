@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 from app.repositories import RecipeListItem
@@ -27,6 +27,17 @@ class HomePage(QWidget):
         self._selected_category_slug: str | None = None
         self._latest_recipes: list[RecipeListItem] = []
         self._featured_recipes: list[RecipeListItem] = []
+        self._tag_widgets: list[QLabel] = []
+        self._category_widgets: list[CategoryChip] = []
+        self._featured_cards: list[RecipeCard] = []
+        self._latest_cards: list[RecipeCard] = []
+        self._last_chip_columns: int | None = None
+        self._last_recipe_columns: int | None = None
+        self._last_featured_columns: int | None = None
+        self._last_card_width: int | None = None
+        self._resize_timer = QTimer(self)
+        self._resize_timer.setSingleShot(True)
+        self._resize_timer.timeout.connect(self._apply_responsive_layout)
 
         self._build_ui()
         self.reload()
@@ -176,11 +187,14 @@ class HomePage(QWidget):
 
     def _populate_tags(self, dashboard: HomeDashboardData) -> None:
         self._clear_grid(self.tag_grid)
+        self._tag_widgets = []
         columns = self._chip_columns()
         for index, tag in enumerate(dashboard.tags[:8]):
             tag_label = QLabel(tag.display_name)
             tag_label.setObjectName("tagPill")
+            self._tag_widgets.append(tag_label)
             self.tag_grid.addWidget(tag_label, index // columns, index % columns)
+        self._last_chip_columns = columns
 
     def _populate_categories(self, dashboard: HomeDashboardData) -> None:
         self._clear_grid(self.category_grid)
@@ -201,6 +215,8 @@ class HomePage(QWidget):
         columns = self._chip_columns()
         for index, chip in enumerate(chips):
             self.category_grid.addWidget(chip, index // columns, index % columns)
+        self._category_widgets = chips
+        self._last_chip_columns = columns
 
     def _handle_category_selected(self, slug: str, checked: bool) -> None:
         self._selected_category_slug = None if slug == "all" else (slug if checked else None)
@@ -246,11 +262,14 @@ class HomePage(QWidget):
         latest_columns = self._recipe_columns()
         featured_columns = min(3, latest_columns)
         card_width = self._recipe_card_width(latest_columns)
+        self._featured_cards = []
+        self._latest_cards = []
 
         for index, recipe in enumerate(featured_recipes[:3]):
             card = RecipeCard(recipe, self.image_service, language_code)
             card.set_card_width(card_width)
             card.clicked.connect(self.recipe_selected.emit)
+            self._featured_cards.append(card)
             self.featured_grid.addWidget(card, index // featured_columns, index % featured_columns)
 
         for index, recipe in enumerate(recipes):
@@ -259,7 +278,12 @@ class HomePage(QWidget):
             card = RecipeCard(recipe, self.image_service, language_code)
             card.set_card_width(card_width)
             card.clicked.connect(self.recipe_selected.emit)
+            self._latest_cards.append(card)
             self.latest_grid.addWidget(card, row, column)
+
+        self._last_recipe_columns = latest_columns
+        self._last_featured_columns = featured_columns
+        self._last_card_width = card_width
 
         has_recipes = bool(recipes)
         self.featured_section.setVisible(bool(featured_recipes))
@@ -290,9 +314,7 @@ class HomePage(QWidget):
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         if self._dashboard_data is not None:
-            self._populate_tags(self._dashboard_data)
-            self._populate_categories(self._dashboard_data)
-            self._render_recipe_sections(self._latest_recipes, self._featured_recipes)
+            self._resize_timer.start(80)
 
     def _recipe_columns(self) -> int:
         width = max(self.width() - 80, 280)
@@ -305,3 +327,47 @@ class HomePage(QWidget):
     def _chip_columns(self) -> int:
         width = max(self.width() - 80, 220)
         return max(1, min(6, width // 180))
+
+    def _apply_responsive_layout(self) -> None:
+        chip_columns = self._chip_columns()
+        if chip_columns != self._last_chip_columns:
+            self._relayout_grid(self.tag_grid, self._tag_widgets, chip_columns)
+            self._relayout_grid(self.category_grid, self._category_widgets, chip_columns)
+            self._last_chip_columns = chip_columns
+
+        recipe_columns = self._recipe_columns()
+        featured_columns = min(3, recipe_columns)
+        card_width = self._recipe_card_width(recipe_columns)
+
+        should_relayout_cards = (
+            recipe_columns != self._last_recipe_columns
+            or featured_columns != self._last_featured_columns
+            or card_width != self._last_card_width
+        )
+        if not should_relayout_cards:
+            return
+
+        self.setUpdatesEnabled(False)
+        try:
+            for card in self._featured_cards:
+                card.set_card_width(card_width)
+            for card in self._latest_cards:
+                card.set_card_width(card_width)
+
+            self._relayout_grid(self.featured_grid, self._featured_cards, featured_columns)
+            self._relayout_grid(self.latest_grid, self._latest_cards, recipe_columns)
+        finally:
+            self.setUpdatesEnabled(True)
+
+        self._last_recipe_columns = recipe_columns
+        self._last_featured_columns = featured_columns
+        self._last_card_width = card_width
+
+    @staticmethod
+    def _relayout_grid(layout: QGridLayout, widgets: list[QWidget], columns: int) -> None:
+        while layout.count():
+            layout.takeAt(0)
+
+        safe_columns = max(columns, 1)
+        for index, widget in enumerate(widgets):
+            layout.addWidget(widget, index // safe_columns, index % safe_columns)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import QGridLayout, QScrollArea, QVBoxLayout, QWidget
 
 from app.services import AppContextService, RecipeService
@@ -26,6 +26,12 @@ class FavoritesPage(QWidget):
         self.recipe_service = recipe_service
         self.context_service = context_service
         self.image_service = image_service
+        self._cards: list[RecipeCard] = []
+        self._last_columns: int | None = None
+        self._last_card_width: int | None = None
+        self._resize_timer = QTimer(self)
+        self._resize_timer.setSingleShot(True)
+        self._resize_timer.timeout.connect(self._apply_responsive_layout)
         self._build_ui()
         self.reload()
 
@@ -86,20 +92,59 @@ class FavoritesPage(QWidget):
             limit=30,
         )
 
+        self._cards = []
         self._clear_grid()
+        columns = self._recipe_columns()
+        card_width = self._recipe_card_width(columns)
         for index, recipe in enumerate(recipes):
-            row = index // 3
-            column = index % 3
+            row = index // columns
+            column = index % columns
             card = RecipeCard(recipe, self.image_service, context.language_code)
+            card.set_card_width(card_width)
             card.clicked.connect(self.recipe_selected.emit)
+            self._cards.append(card)
             self.recipe_grid.addWidget(card, row, column)
+
+        self._last_columns = columns
+        self._last_card_width = card_width
 
         self.grid_card.setVisible(bool(recipes))
         self.empty_state.setVisible(not recipes)
 
-    def _clear_grid(self) -> None:
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self._cards:
+            self._resize_timer.start(80)
+
+    def _apply_responsive_layout(self) -> None:
+        columns = self._recipe_columns()
+        card_width = self._recipe_card_width(columns)
+        if columns == self._last_columns and card_width == self._last_card_width:
+            return
+
+        self.setUpdatesEnabled(False)
+        try:
+            self._clear_grid(preserve_existing=True)
+            for index, card in enumerate(self._cards):
+                card.set_card_width(card_width)
+                self.recipe_grid.addWidget(card, index // columns, index % columns)
+        finally:
+            self.setUpdatesEnabled(True)
+
+        self._last_columns = columns
+        self._last_card_width = card_width
+
+    def _clear_grid(self, preserve_existing: bool = False) -> None:
         while self.recipe_grid.count():
             item = self.recipe_grid.takeAt(0)
             widget = item.widget()
-            if widget is not None:
+            if widget is not None and not preserve_existing:
                 widget.deleteLater()
+
+    def _recipe_columns(self) -> int:
+        width = max(self.width() - 80, 280)
+        return max(1, min(3, width // 340))
+
+    def _recipe_card_width(self, columns: int) -> int:
+        width = max(self.width() - 120, 280)
+        return max(280, min(380, (width - ((columns - 1) * 16)) // max(columns, 1)))

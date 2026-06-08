@@ -44,6 +44,13 @@ def build_stylesheet(theme: ThemeDefinition) -> str:
         color: {colors.text_primary};
     }}
 
+    QLabel#brandLogo {{
+        background-color: {colors.surface};
+        border: 1px solid {colors.border};
+        border-radius: {radii.lg}px;
+        padding: {spacing.sm}px;
+    }}
+
     QLabel#windowSubtitleLabel,
     QLabel#recipeCardMeta,
     QLabel#emptyStateDescription {{

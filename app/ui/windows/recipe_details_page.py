@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -25,7 +26,6 @@ from app.ui.components.empty_state import EmptyState
 from app.ui.components.rating_control import RatingControl
 from app.ui.components.section_header import SectionHeader
 from app.utils.i18n import translate
-
 
 class RecipeDetailsPage(QWidget):
     back_requested = Signal()

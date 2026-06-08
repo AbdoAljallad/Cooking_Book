@@ -44,9 +44,5 @@ dist/
 # PyInstaller / packaging artifacts
 __pypackages__/
 
-# Generated runtime assets
-assets/images/recipes/*
-assets/images/placeholders/no_image.png
-
 # Logs
 *.log

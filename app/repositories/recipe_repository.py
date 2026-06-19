@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import Select, func, or_, select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import selectinload
 
 from app.models import (
     Category,
@@ -40,43 +40,52 @@ class RecipeRepository(BaseRepository[Recipe]):
         language_code: str | None = None,
     ) -> list[RecipeListItem]:
         statement = self._basic_list_statement(language_code).offset(offset)
+
         if limit is not None:
             statement = statement.limit(limit)
 
         rows = self.session.execute(statement).all()
-        return self._with_tags([self._to_list_item(row) for row in rows], language_code)
+        return self._with_tags(
+            [self._to_list_item(row) for row in rows],
+            language_code,
+        )
 
     def get_by_id(self, recipe_id: int) -> Recipe | None:
         statement = (
             select(Recipe)
             .options(
-                joinedload(Recipe.category),
-                joinedload(Recipe.category)
-                .joinedload(Category.translations)
-                .joinedload(CategoryTranslation.language),
-                joinedload(Recipe.created_by_profile),
-                joinedload(Recipe.translations).joinedload(RecipeTranslation.language),
-                joinedload(Recipe.ingredients).joinedload(RecipeIngredient.unit),
-                joinedload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient),
-                joinedload(Recipe.ingredients)
-                .joinedload(RecipeIngredient.unit)
-                .joinedload(Unit.translations)
-                .joinedload(UnitTranslation.language),
-                joinedload(Recipe.ingredients)
-                .joinedload(RecipeIngredient.ingredient)
-                .joinedload(Ingredient.translations)
-                .joinedload(IngredientTranslation.language),
-                joinedload(Recipe.steps)
-                .joinedload(RecipeStep.translations)
-                .joinedload(RecipeStepTranslation.language),
-                joinedload(Recipe.tag_links)
-                .joinedload(RecipeTag.tag)
-                .joinedload(Tag.translations)
-                .joinedload(TagTranslation.language),
+                selectinload(Recipe.category)
+                .selectinload(Category.translations)
+                .selectinload(CategoryTranslation.language),
+
+                selectinload(Recipe.created_by_profile),
+
+                selectinload(Recipe.translations)
+                .selectinload(RecipeTranslation.language),
+
+                selectinload(Recipe.ingredients)
+                .selectinload(RecipeIngredient.unit)
+                .selectinload(Unit.translations)
+                .selectinload(UnitTranslation.language),
+
+                selectinload(Recipe.ingredients)
+                .selectinload(RecipeIngredient.ingredient)
+                .selectinload(Ingredient.translations)
+                .selectinload(IngredientTranslation.language),
+
+                selectinload(Recipe.steps)
+                .selectinload(RecipeStep.translations)
+                .selectinload(RecipeStepTranslation.language),
+
+                selectinload(Recipe.tag_links)
+                .selectinload(RecipeTag.tag)
+                .selectinload(Tag.translations)
+                .selectinload(TagTranslation.language),
             )
             .where(Recipe.id == recipe_id)
         )
-        return self.session.execute(statement).unique().scalar_one_or_none()
+
+        return self.session.execute(statement).scalar_one_or_none()
 
     def is_favorite(self, recipe_id: int, profile_id: int) -> bool:
         statement = select(Favorite).where(
@@ -85,7 +94,12 @@ class RecipeRepository(BaseRepository[Recipe]):
         )
         return self.session.execute(statement).scalar_one_or_none() is not None
 
-    def set_favorite(self, recipe_id: int, profile_id: int, is_favorite: bool) -> bool:
+    def set_favorite(
+        self,
+        recipe_id: int,
+        profile_id: int,
+        is_favorite: bool,
+    ) -> bool:
         existing = self.session.execute(
             select(Favorite).where(
                 Favorite.recipe_id == recipe_id,
@@ -95,7 +109,9 @@ class RecipeRepository(BaseRepository[Recipe]):
 
         if is_favorite:
             if existing is None:
-                self.session.add(Favorite(recipe_id=recipe_id, profile_id=profile_id))
+                self.session.add(
+                    Favorite(recipe_id=recipe_id, profile_id=profile_id)
+                )
                 self.session.flush()
             return True
 
@@ -192,7 +208,10 @@ class RecipeRepository(BaseRepository[Recipe]):
             statement = statement.limit(limit)
 
         rows = self.session.execute(statement).all()
-        return self._with_tags([self._to_list_item(row) for row in rows], language_code)
+        return self._with_tags(
+            [self._to_list_item(row) for row in rows],
+            language_code,
+        )
 
     def list_by_category(
         self,
@@ -298,7 +317,10 @@ class RecipeRepository(BaseRepository[Recipe]):
             statement = statement.limit(limit)
 
         rows = self.session.execute(statement).all()
-        return self._with_tags([self._to_list_item(row) for row in rows], language_code)
+        return self._with_tags(
+            [self._to_list_item(row) for row in rows],
+            language_code,
+        )
 
     def _basic_list_statement(self, language_code: str | None) -> Select:
         target_language = language_code or "en"
@@ -372,10 +394,21 @@ class RecipeRepository(BaseRepository[Recipe]):
         statement = (
             select(
                 Recipe,
-                func.coalesce(func.nullif(requested_title, ""), english_title, "Untitled"),
-                func.coalesce(func.nullif(requested_description, ""), english_description),
+                func.coalesce(
+                    func.nullif(requested_title, ""),
+                    english_title,
+                    "Untitled",
+                ),
+                func.coalesce(
+                    func.nullif(requested_description, ""),
+                    english_description,
+                ),
                 Category.slug,
-                func.coalesce(func.nullif(requested_category, ""), english_category, Category.slug),
+                func.coalesce(
+                    func.nullif(requested_category, ""),
+                    english_category,
+                    Category.slug,
+                ),
             )
             .join(Category, Category.id == Recipe.category_id)
             .where(Recipe.is_active.is_(True))
@@ -442,14 +475,20 @@ class RecipeRepository(BaseRepository[Recipe]):
         rows = self.session.execute(
             select(
                 RecipeTag.recipe_id,
-                func.coalesce(func.nullif(requested_tag, ""), english_tag, Tag.slug),
+                func.coalesce(
+                    func.nullif(requested_tag, ""),
+                    english_tag,
+                    Tag.slug,
+                ),
             )
             .join(Tag, Tag.id == RecipeTag.tag_id)
             .where(RecipeTag.recipe_id.in_(recipe_ids))
             .order_by(Tag.slug.asc())
         ).all()
 
-        tags_by_recipe: dict[int, list[str]] = {recipe_id: [] for recipe_id in recipe_ids}
+        tags_by_recipe: dict[int, list[str]] = {
+            recipe_id: [] for recipe_id in recipe_ids
+        }
 
         for recipe_id, tag_name in rows:
             tags_by_recipe.setdefault(recipe_id, []).append(tag_name)

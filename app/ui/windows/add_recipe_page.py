@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -40,7 +41,6 @@ from app.ui.components.recipe_image_input import RecipeImageInputCard
 from app.ui.components.section_header import SectionHeader
 from app.ui.components.step_form_row import StepFormRow
 from app.utils.i18n import translate
-
 
 class AddRecipePage(QWidget):
     back_requested = Signal()
@@ -528,17 +528,23 @@ class AddRecipePage(QWidget):
         for index, step_row in enumerate(self.step_rows, start=1):
             step_row.set_step_number(index)
             step_row.set_language(self._current_language_code)
-
     def _handle_save(self) -> None:
         context = self.context_service.get_context()
 
         if context.profile_id is None:
-            self._show_error(translate(self._current_language_code, "add_recipe.error.profile_required"))
+            self._show_error(
+                translate(
+                    self._current_language_code,
+                    "add_recipe.error.profile_required",
+                )
+            )
             return
 
         try:
             recipe_input = self._build_create_input()
-            if self._editing_recipe_id is None:
+            is_editing = self._editing_recipe_id is not None
+
+            if not is_editing:
                 recipe_id = self.recipe_service.create_recipe(
                     recipe_input,
                     created_by_profile_id=context.profile_id,
@@ -548,12 +554,15 @@ class AddRecipePage(QWidget):
                     self._editing_recipe_id,
                     recipe_input,
                 )
+                self._editing_recipe_id = recipe_id
+
         except Exception as exc:
             self._show_error(str(exc))
             return
 
         self.error_banner.hide()
-        if self._editing_recipe_id is None:
+
+        if not is_editing:
             self.recipe_created.emit(recipe_id)
             return
 
@@ -955,3 +964,16 @@ class AddRecipePage(QWidget):
     def _show_error(self, message: str) -> None:
         self.error_banner.setText(message)
         self.error_banner.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
